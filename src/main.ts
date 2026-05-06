@@ -1,5 +1,7 @@
 /// <reference types="dom-serial" />
 import Papa from 'papaparse';
+import * as QRCode from 'qrcode';
+import * as bwipjs from 'bwip-js';
 
 interface CardData {
   id: string; // Unique identifier
@@ -13,6 +15,7 @@ let currentEditId: string | null = null;
 let autoSyncTimer: ReturnType<typeof setInterval> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let countdownSeconds = 0;
+let currentFilter: 'all' | 'unprinted' | 'printed' = 'all';
 
 // DOM Elements
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
@@ -145,9 +148,20 @@ function saveCards() {
 function renderCards(filterText = '') {
   cardsContainer.innerHTML = '';
 
+  let printedIds: Set<string> = new Set();
+  try {
+    const saved = localStorage.getItem('printed-items');
+    if (saved) printedIds = new Set(JSON.parse(saved));
+  } catch(e) {}
+
   const filtered = cards.filter(c => {
     const values = Object.values(c).join(' ').toLowerCase();
-    return values.includes(filterText.toLowerCase());
+    if (!values.includes(filterText.toLowerCase())) return false;
+    
+    if (currentFilter === 'unprinted' && printedIds.has(c.id)) return false;
+    if (currentFilter === 'printed' && !printedIds.has(c.id)) return false;
+
+    return true;
   });
 
   if (filtered.length === 0) {
@@ -158,12 +172,6 @@ function renderCards(filterText = '') {
     `;
     return;
   }
-
-  let printedIds: Set<string> = new Set();
-  try {
-    const saved = localStorage.getItem('printed-items');
-    if (saved) printedIds = new Set(JSON.parse(saved));
-  } catch(e) {}
 
   filtered.forEach(card => {
     const cardEl = document.createElement('div');
@@ -440,6 +448,8 @@ interface PrintLine {
   isImage?: boolean;
   imageUrl?: string;
   gamma?: number;
+  isQr?: boolean;
+  isBarcode?: boolean;
 }
 
 let printLines: PrintLine[] = [];
@@ -449,15 +459,13 @@ const closePrintPreview = document.getElementById('close-print-preview') as HTML
 const receiptPaper = document.getElementById('receipt-paper') as HTMLDivElement;
 const printLinesControls = document.getElementById('print-lines-controls') as HTMLDivElement;
 const addPrintLineBtn = document.getElementById('add-print-line-btn') as HTMLButtonElement;
+const addQrBtn = document.getElementById('add-qr-btn') as HTMLButtonElement;
+const addBarcodeBtn = document.getElementById('add-barcode-btn') as HTMLButtonElement;
+const addSeparatorBtn = document.getElementById('add-separator-btn') as HTMLButtonElement;
 const printPreviewCancel = document.getElementById('print-preview-cancel') as HTMLButtonElement;
 const printPreviewSend = document.getElementById('print-preview-send') as HTMLButtonElement;
 
-function openPrintPreview(id: string) {
-  const card = cards.find(c => c.id === id);
-  if (!card) return;
-
-  currentEditId = id;
-
+function generatePrintLines(card: any): PrintLine[] {
   const titleKey = Object.keys(card).find(k => 
     k.toLowerCase().includes('brief identifier') || 
     k.toLowerCase().match(/name|title|item/)
@@ -465,7 +473,6 @@ function openPrintPreview(id: string) {
   const title = card[titleKey] || 'Receipt';
   const donationNum = card['Donation #'] || card.id;
 
-  // Template logic
   let template: Record<string, any> = {};
   try {
     const saved = localStorage.getItem('print-template');
@@ -488,24 +495,15 @@ function openPrintPreview(id: string) {
     return { ...defaultLine, id };
   };
 
-  // Build default print lines from card data
-  printLines = [];
+  const lines: PrintLine[] = [];
+  lines.push(applyTemplate('__title__', { enabled: true, text: title, bold: true, align: 'center', size: 'large' }));
+  lines.push(applyTemplate('__donation_num__', { enabled: true, text: `Donation #${donationNum}`, bold: false, align: 'center', size: 'normal' }));
+  lines.push(applyTemplate('__separator_top__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
 
-  // Title line
-  printLines.push(applyTemplate('__title__', { enabled: true, text: title, bold: true, align: 'center', size: 'large' }));
-
-  // Donation number
-  printLines.push(applyTemplate('__donation_num__', { enabled: true, text: `Donation #${donationNum}`, bold: false, align: 'center', size: 'normal' }));
-
-  // Separator
-  printLines.push(applyTemplate('__separator_top__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
-
-  // Card fields
   for (const [key, value] of Object.entries(card)) {
     if (key === 'id' || key === titleKey || key === 'Donation #') continue;
     if (!value || !value.trim()) continue;
 
-    // Skip photo URLs in print text, but add them as an image line
     const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
     const looksLikeImageUrl = /^https?:\/\/.+/i.test(value.trim()) && (
       /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(value) ||
@@ -515,15 +513,25 @@ function openPrintPreview(id: string) {
     );
     
     if (isPhotoColumn && looksLikeImageUrl) {
-      printLines.push(applyTemplate(`__img_${key}__`, { enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: value.trim(), gamma: 1.0 }));
+      lines.push(applyTemplate(`__img_${key}__`, { enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: value.trim(), gamma: 1.0 }));
       continue;
     }
 
-    printLines.push(applyTemplate(`__field_${key}__`, { enabled: true, text: `${shortLabel(key)}: ${value}`, bold: false, align: 'left', size: 'normal' }));
+    lines.push(applyTemplate(`__field_${key}__`, { enabled: true, text: `${shortLabel(key)}: ${value}`, bold: false, align: 'left', size: 'normal' }));
   }
 
-  // Footer separator
-  printLines.push(applyTemplate('__separator_bottom__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
+  lines.push(applyTemplate('__separator_bottom__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
+  return lines;
+}
+
+function openPrintPreview(id: string) {
+  const card = cards.find(c => c.id === id);
+  if (!card) return;
+
+  currentEditId = id;
+  printLines = generatePrintLines(card);
+
+
 
   renderPrintPreview();
   printPreviewModal.classList.remove('hidden');
@@ -570,15 +578,55 @@ function renderPrintPreview() {
     receiptPaper.appendChild(div);
   });
 
+  let dragStartIndex = -1;
+
   // Render controls
   printLinesControls.innerHTML = '';
   printLines.forEach((line, index) => {
     const control = document.createElement('div');
     control.className = 'print-line-control';
+    control.draggable = true;
+    control.style.cursor = 'grab';
+
+    // Drag and Drop Logic
+    control.addEventListener('dragstart', (e) => {
+      dragStartIndex = index;
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', index.toString());
+      }
+      control.style.opacity = '0.5';
+    });
+    control.addEventListener('dragend', () => {
+      control.style.opacity = '1';
+    });
+    control.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      control.style.borderTop = '2px solid var(--primary-color)';
+    });
+    control.addEventListener('dragleave', () => {
+      control.style.borderTop = '';
+    });
+    control.addEventListener('drop', (e) => {
+      e.preventDefault();
+      control.style.borderTop = '';
+      if (dragStartIndex > -1 && dragStartIndex !== index) {
+        const item = printLines.splice(dragStartIndex, 1)[0];
+        printLines.splice(index, 0, item);
+        renderPrintPreview();
+      }
+    });
 
     const topRow = document.createElement('div');
     topRow.className = 'print-line-top';
 
+    const dragHandle = document.createElement('span');
+    dragHandle.textContent = '☰';
+    dragHandle.style.cursor = 'grab';
+    dragHandle.style.marginRight = '8px';
+    dragHandle.style.color = '#888';
+    
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = line.enabled;
@@ -587,15 +635,38 @@ function renderPrintPreview() {
       renderPrintPreview();
     });
 
+    topRow.appendChild(dragHandle);
+    topRow.appendChild(checkbox);
+
     if (line.isImage) {
-      const textSpan = document.createElement('span');
-      textSpan.textContent = `🖼️ Image: ${line.imageUrl?.split('/').pop() || 'Photo'}`;
-      textSpan.style.flex = '1';
-      textSpan.style.fontSize = '0.85rem';
-      textSpan.style.color = 'var(--primary-color)';
-      textSpan.style.overflow = 'hidden';
-      textSpan.style.textOverflow = 'ellipsis';
-      textSpan.style.whiteSpace = 'nowrap';
+      if (line.isQr || line.isBarcode) {
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.value = line.text || '';
+        textInput.style.flex = '1';
+        textInput.placeholder = line.isQr ? 'QR Code Data' : 'Barcode Data';
+        
+        let typingTimer: any;
+        textInput.addEventListener('input', () => {
+          printLines[index].text = textInput.value;
+          clearTimeout(typingTimer);
+          typingTimer = setTimeout(() => {
+            updateBarcodeQrImage(printLines[index], index);
+            savePrintTemplate();
+          }, 300);
+        });
+        topRow.appendChild(textInput);
+      } else {
+        const textSpan = document.createElement('span');
+        textSpan.textContent = `🖼️ Image: ${line.imageUrl?.split('/').pop() || 'Photo'}`;
+        textSpan.style.flex = '1';
+        textSpan.style.fontSize = '0.85rem';
+        textSpan.style.color = 'var(--primary-color)';
+        textSpan.style.overflow = 'hidden';
+        textSpan.style.textOverflow = 'ellipsis';
+        textSpan.style.whiteSpace = 'nowrap';
+        topRow.appendChild(textSpan);
+      }
 
       const sliderWrap = document.createElement('div');
       sliderWrap.style.display = 'flex';
@@ -624,9 +695,7 @@ function renderPrintPreview() {
           img.style.filter = `grayscale(100%) contrast(150%) brightness(${slider.value})`;
         }
       });
-      slider.addEventListener('change', () => {
-        savePrintTemplate();
-      });
+      slider.addEventListener('change', () => savePrintTemplate());
       
       const resetBtn = document.createElement('button');
       resetBtn.type = 'button';
@@ -642,9 +711,7 @@ function renderPrintPreview() {
         slider.value = '1.0';
         printLines[index].gamma = 1.0;
         const img = document.getElementById('preview-img-' + index);
-        if (img) {
-          img.style.filter = `grayscale(100%) contrast(150%) brightness(1.0)`;
-        }
+        if (img) img.style.filter = `grayscale(100%) contrast(150%) brightness(1.0)`;
         savePrintTemplate();
       });
       
@@ -661,8 +728,6 @@ function renderPrintPreview() {
         renderPrintPreview();
       });
 
-      topRow.appendChild(checkbox);
-      topRow.appendChild(textSpan);
       topRow.appendChild(sliderWrap);
       topRow.appendChild(removeBtn);
     } else {
@@ -682,7 +747,6 @@ function renderPrintPreview() {
         renderPrintPreview();
       });
 
-      topRow.appendChild(checkbox);
       topRow.appendChild(textInput);
       topRow.appendChild(removeBtn);
     }
@@ -740,7 +804,11 @@ function renderPrintPreview() {
     }));
 
     control.appendChild(topRow);
-    control.appendChild(optionsRow);
+    if (!line.isImage || line.isQr || line.isBarcode) {
+      control.appendChild(optionsRow);
+    } else {
+      control.appendChild(optionsRow); // keep layout consistent
+    }
     printLinesControls.appendChild(control);
   });
 }
@@ -766,8 +834,46 @@ function savePrintTemplate() {
   localStorage.setItem('print-template', JSON.stringify(template));
 }
 
+async function updateBarcodeQrImage(line: PrintLine, index: number) {
+  if (line.isQr) {
+    try {
+      line.imageUrl = await QRCode.toDataURL(line.text || ' ', { width: 250, margin: 2, scale: 4 });
+    } catch {}
+  } else if (line.isBarcode) {
+    try {
+      const canvas = document.createElement('canvas');
+      bwipjs.toCanvas(canvas, { bcid: 'code128', text: line.text || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
+      line.imageUrl = canvas.toDataURL('image/png');
+    } catch {}
+  }
+  
+  const img = document.getElementById('preview-img-' + index) as HTMLImageElement;
+  if (img && line.imageUrl) {
+    img.src = line.imageUrl;
+  }
+}
+
 addPrintLineBtn.addEventListener('click', () => {
   printLines.push({ enabled: true, text: '', bold: false, align: 'left', size: 'normal' });
+  renderPrintPreview();
+});
+
+addQrBtn.addEventListener('click', async () => {
+  const line: PrintLine = { enabled: true, text: 'QRCODE', bold: false, align: 'center', size: 'normal', isImage: true, isQr: true, gamma: 1.0 };
+  printLines.push(line);
+  await updateBarcodeQrImage(line, printLines.length - 1);
+  renderPrintPreview();
+});
+
+addBarcodeBtn.addEventListener('click', async () => {
+  const line: PrintLine = { enabled: true, text: '12345678', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, gamma: 1.0 };
+  printLines.push(line);
+  await updateBarcodeQrImage(line, printLines.length - 1);
+  renderPrintPreview();
+});
+
+addSeparatorBtn.addEventListener('click', () => {
+  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
   renderPrintPreview();
 });
 
@@ -887,21 +993,17 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
 }
 
 // Send to Printer from preview
-printPreviewSend.addEventListener('click', async () => {
-  if (!port || !port.writable) {
-    alert('Printer not connected! Please connect the printer first.');
-    return;
-  }
-
-  const enabledLines = printLines.filter(l => l.enabled);
+async function sendLinesToPrinter(lines: PrintLine[]) {
+  if (!port || !port.writable) throw new Error('Printer not connected! Please connect the printer first.');
+  const enabledLines = lines.filter(l => l.enabled);
   if (enabledLines.length === 0) return;
 
-  try {
-    const writer = port.writable.getWriter();
-    const ESC = 0x1B;
-    const GS = 0x1D;
-    const textEncoder = new TextEncoder();
+  const writer = port.writable.getWriter();
+  const ESC = 0x1B;
+  const GS = 0x1D;
+  const textEncoder = new TextEncoder();
 
+  try {
     // Init printer
     await writer.write(new Uint8Array([ESC, 0x40]));
 
@@ -960,9 +1062,15 @@ printPreviewSend.addEventListener('click', async () => {
     // Feed & cut
     await writer.write(new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]));
     await writer.write(new Uint8Array([GS, 0x56, 0x41, 0x10]));
-
+  } finally {
     writer.releaseLock();
+  }
+}
 
+// Send to Printer from preview
+printPreviewSend.addEventListener('click', async () => {
+  try {
+    await sendLinesToPrinter(printLines);
     closePrintPreviewModal();
 
     // UI feedback on card and persistent printed tracking
@@ -986,8 +1094,10 @@ printPreviewSend.addEventListener('click', async () => {
       }
     }
   } catch (err: any) {
-    console.error('Print failed', err);
-    alert('Print failed: ' + err.message);
+    if (err.message !== 'Printer not connected! Please connect the printer first.') {
+      console.error('Print failed', err);
+    }
+    alert(err.message);
   }
 });
 
@@ -1029,6 +1139,62 @@ function updateCountdownDisplay() {
 fetchDataBtn.addEventListener('click', fetchData);
 connectPrinterBtn.addEventListener('click', connectPrinter);
 searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputElement).value));
+
+document.querySelectorAll('.filter-tab').forEach(tab => {
+  tab.addEventListener('click', (e) => {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    (e.target as HTMLElement).classList.add('active');
+    currentFilter = (e.target as HTMLElement).dataset.filter as any;
+    renderCards(searchInput.value);
+  });
+});
+
+const printAllUnprintedBtn = document.getElementById('print-all-unprinted-btn') as HTMLButtonElement;
+printAllUnprintedBtn.addEventListener('click', async () => {
+  if (!port || !port.writable) {
+    alert('Printer not connected! Please connect the printer first.');
+    return;
+  }
+
+  let printedIds: Set<string> = new Set();
+  try {
+    const saved = localStorage.getItem('printed-items');
+    if (saved) printedIds = new Set(JSON.parse(saved));
+  } catch(e) {}
+  
+  const unprintedCards = cards.filter(c => !printedIds.has(c.id));
+  if (unprintedCards.length === 0) {
+    alert('No unprinted items found.');
+    return;
+  }
+  
+  if (!confirm(`Are you sure you want to print ${unprintedCards.length} items sequentially?`)) {
+    return;
+  }
+  
+  const originalText = printAllUnprintedBtn.textContent;
+  printAllUnprintedBtn.textContent = 'Printing...';
+  printAllUnprintedBtn.disabled = true;
+  
+  try {
+    for (const card of unprintedCards) {
+       const lines = generatePrintLines(card);
+       await sendLinesToPrinter(lines);
+       
+       printedIds.add(card.id);
+       localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+       
+       // Wait a tiny bit between receipts to prevent buffer overflow
+       await new Promise(r => setTimeout(r, 500));
+    }
+  } catch (err: any) {
+    alert('Bulk print error: ' + err.message);
+  } finally {
+    printAllUnprintedBtn.textContent = originalText;
+    printAllUnprintedBtn.disabled = false;
+    renderCards(searchInput.value);
+  }
+});
 
 autoSyncToggle.addEventListener('change', () => {
   localStorage.setItem('auto-sync', String(autoSyncToggle.checked));

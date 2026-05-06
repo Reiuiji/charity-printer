@@ -167,6 +167,37 @@ body {
   color: var(--text-muted);
 }
 
+.filter-tabs {
+  display: flex;
+  gap: 5px;
+  background: var(--glass-bg);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+}
+
+.filter-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.filter-tab.active {
+  background: var(--primary-color);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.filter-tab:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
 input[type="text"] {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--glass-border);

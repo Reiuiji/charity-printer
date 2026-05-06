@@ -62,10 +62,20 @@
         </aside>
 
         <section class="content">
-          <div class="controls-bar">
-            <h2>Items</h2>
-            <div class="search-box">
-              <input type="text" id="search-input" placeholder="Search items..." />
+          <div class="controls-bar" style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <div style="display: flex; flex: 1; align-items: center; gap: 15px;">
+              <h2>Items</h2>
+              <div class="filter-tabs" id="filter-tabs">
+                <button class="filter-tab active" data-filter="all">All</button>
+                <button class="filter-tab" data-filter="unprinted">Unprinted</button>
+                <button class="filter-tab" data-filter="printed">Printed</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search items..." />
+              </div>
+              <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>
           </div>
 
@@ -125,12 +135,13 @@
             <!-- Field Controls -->
             <div class="print-controls">
               <h3>Receipt Lines</h3>
-              <div id="print-lines-controls">
-                <!-- Dynamic line controls -->
+              <div id="print-lines-controls"></div>
+              <div style="margin-top: 15px; margin-bottom: 15px; display: flex; gap: 8px;">
+                <button type="button" class="btn secondary-btn" id="add-print-line-btn">➕ Add Text</button>
+                <button type="button" class="btn secondary-btn" id="add-qr-btn">➕ Add QR</button>
+                <button type="button" class="btn secondary-btn" id="add-barcode-btn">➕ Add Barcode</button>
+                <button type="button" class="btn secondary-btn" id="add-separator-btn">➕ Add Separator</button>
               </div>
-              <button type="button" class="btn secondary-btn" id="add-print-line-btn">+ Add Line</button>
-            </div>
-          </div>
           <div class="modal-actions">
             <button type="button" class="btn secondary-btn" id="print-preview-cancel">Cancel</button>
             <button type="button" class="btn print-btn" id="print-preview-send">🖨️ Send to Printer</button>
