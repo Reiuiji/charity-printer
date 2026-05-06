@@ -160,6 +160,10 @@ body {
   align-items: start;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .sidebar {
   padding: 24px;
   display: flex;
