@@ -10,7 +10,7 @@ interface CardData {
 
 interface PrinterTransport {
   type: string;
-  connect(): Promise<void>;
+  connect(existingDevice?: any): Promise<void>;
   disconnect(): Promise<void>;
   write(data: Uint8Array): Promise<void>;
 }
@@ -18,8 +18,8 @@ interface PrinterTransport {
 class SerialPrinterTransport implements PrinterTransport {
   type = 'serial';
   port: any | null = null;
-  async connect() {
-    this.port = await (navigator as any).serial.requestPort();
+  async connect(existingPort?: any) {
+    this.port = existingPort || await (navigator as any).serial.requestPort();
     await this.port.open({ baudRate: 9600 });
   }
   async disconnect() {
@@ -37,8 +37,8 @@ class UsbPrinterTransport implements PrinterTransport {
   type = 'usb';
   device: any | null = null;
   outEndpoint: number = -1;
-  async connect() {
-    this.device = await (navigator as any).usb.requestDevice({ filters: [] });
+  async connect(existingDevice?: any) {
+    this.device = existingDevice || await (navigator as any).usb.requestDevice({ filters: [] });
     await this.device.open();
     if (this.device.configuration === null) await this.device.selectConfiguration(1);
     await this.device.claimInterface(0);
@@ -95,6 +95,27 @@ let currentFilter: 'all' | 'unprinted' | 'printed' = 'all';
 let isTemplateMode = false;
 let lastClickedCard: CardData | null = null;
 
+// Template Profiles
+interface TemplateProfile {
+  id: string;
+  name: string;
+  lines: PrintLine[];
+}
+let activeTemplateId = 'default';
+let templateProfiles: Record<string, TemplateProfile> = {
+  'default': { id: 'default', name: 'Default Template', lines: [] }
+};
+
+// History
+interface PrintHistoryLog {
+  timestamp: number;
+  id: string;
+  title: string;
+  status: 'success' | 'error';
+  errorMessage?: string;
+}
+let printHistory: PrintHistoryLog[] = [];
+
 // DOM Elements
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
 const fetchDataBtn = document.getElementById('fetch-data-btn') as HTMLButtonElement;
@@ -132,6 +153,16 @@ const closeModal = document.getElementById('close-modal') as HTMLSpanElement;
 const editForm = document.getElementById('edit-form') as HTMLFormElement;
 const editFieldsContainer = document.getElementById('edit-fields-container') as HTMLDivElement;
 const modalPrintBtn = document.getElementById('modal-print-btn') as HTMLButtonElement;
+
+// Template Profile and History DOM
+const templateProfileSelect = document.getElementById('template-profile-select') as HTMLSelectElement;
+const newTemplateBtn = document.getElementById('new-template-btn') as HTMLButtonElement;
+const deleteTemplateBtn = document.getElementById('delete-template-btn') as HTMLButtonElement;
+const viewHistoryBtn = document.getElementById('view-history-btn') as HTMLButtonElement;
+const historyModal = document.getElementById('history-modal') as HTMLDivElement;
+const closeHistoryModal = document.getElementById('close-history-modal') as HTMLSpanElement;
+const historyList = document.getElementById('history-list') as HTMLDivElement;
+const clearHistoryBtn = document.getElementById('clear-history-btn') as HTMLButtonElement;
 
 // Map verbose Google Sheets question headers to short labels for card display
 function shortLabel(key: string): string {
@@ -204,6 +235,30 @@ function init() {
     autoPrintToggle.checked = true;
   }
 
+  // Load Profiles and History
+  const savedProfiles = localStorage.getItem('template-profiles');
+  if (savedProfiles) {
+    try { templateProfiles = JSON.parse(savedProfiles); } catch(e) {}
+  } else {
+    const oldBase = localStorage.getItem('base-print-template');
+    if (oldBase) {
+      try { templateProfiles['default'].lines = JSON.parse(oldBase); } catch(e) {}
+    }
+  }
+  
+  const savedActive = localStorage.getItem('active-template-id');
+  if (savedActive && templateProfiles[savedActive]) {
+    activeTemplateId = savedActive;
+  }
+  
+  const savedHistory = localStorage.getItem('print-history');
+  if (savedHistory) {
+    try { printHistory = JSON.parse(savedHistory); } catch(e) {}
+  }
+
+  renderTemplateProfiles();
+
+
   // Initialize connection UI
   function updateConnectionUI() {
     const val = connectionTypeSelect.value;
@@ -230,6 +285,32 @@ function init() {
   }
 
   updateMainStatuses();
+
+  // Auto-Connect Logic
+  setTimeout(async () => {
+    const savedType = localStorage.getItem('last-transport-type');
+    if (!savedType) return;
+    connectionTypeSelect.value = savedType;
+    updateConnectionUI();
+
+    if (savedType === 'network') {
+      const savedIp = localStorage.getItem('last-network-ip');
+      if (savedIp) {
+        networkIpInput.value = savedIp;
+        await connectPrinter();
+      }
+    } else if (savedType === 'serial' && 'serial' in navigator) {
+      const ports = await (navigator as any).serial.getPorts();
+      if (ports.length > 0) {
+        await connectPrinter(ports[0]);
+      }
+    } else if (savedType === 'usb' && 'usb' in navigator) {
+      const devices = await (navigator as any).usb.getDevices();
+      if (devices.length > 0) {
+        await connectPrinter(devices[0]);
+      }
+    }
+  }, 100);
 }
 
 // Fetch Data from Google Sheets CSV
@@ -302,19 +383,67 @@ async function autoPrintNewItems() {
   if (unprintedCards.length === 0) return;
   
   for (const card of unprintedCards) {
+     const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
+     const title = card[titleKey] || 'Untitled Item';
      try {
        const lines = await generatePrintLines(card);
        await sendLinesToPrinter(lines);
        
+       addHistoryLog(card.id, title, 'success');
        printedIds.add(card.id);
        localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
        
        await new Promise(r => setTimeout(r, 500));
-     } catch (err) {
+     } catch (err: any) {
+       addHistoryLog(card.id, title, 'error', err.message);
        console.error("Auto-print failed for", card.id, err);
      }
   }
   renderCards(searchInput.value);
+}
+
+function renderTemplateProfiles() {
+  templateProfileSelect.innerHTML = '';
+  for (const [id, profile] of Object.entries(templateProfiles)) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = profile.name;
+    opt.style.color = '#000';
+    if (id === activeTemplateId) opt.selected = true;
+    templateProfileSelect.appendChild(opt);
+  }
+}
+
+function addHistoryLog(id: string, title: string, status: 'success' | 'error', errorMessage?: string) {
+  printHistory.unshift({ timestamp: Date.now(), id, title, status, errorMessage });
+  if (printHistory.length > 100) printHistory = printHistory.slice(0, 100);
+  localStorage.setItem('print-history', JSON.stringify(printHistory));
+}
+
+function renderHistory() {
+  historyList.innerHTML = '';
+  if (printHistory.length === 0) {
+    historyList.innerHTML = '<p style="color:var(--text-muted)">No print history yet.</p>';
+    return;
+  }
+
+  printHistory.forEach(log => {
+    const div = document.createElement('div');
+    div.style.background = 'rgba(255,255,255,0.05)';
+    div.style.padding = '10px';
+    div.style.borderRadius = '6px';
+    div.style.borderLeft = `4px solid ${log.status === 'success' ? '#4ade80' : '#ef4444'}`;
+    
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;color:var(--text-muted)">
+        <span>${new Date(log.timestamp).toLocaleString()}</span>
+        <span>ID: ${log.id}</span>
+      </div>
+      <div style="font-weight:bold;">${log.title}</div>
+      ${log.errorMessage ? "<div style='color:#ef4444;font-size:0.8rem;margin-top:4px'>" + log.errorMessage + "</div>" : ""}
+    `;
+    historyList.appendChild(div);
+  });
 }
 
 // Render Cards
@@ -586,8 +715,9 @@ editModal.addEventListener('click', (e) => {
 });
 
 // Printer Logic
-async function connectPrinter() {
+async function connectPrinter(existingDevice?: any) {
   const type = connectionTypeSelect.value;
+  localStorage.setItem('last-transport-type', type);
 
   try {
     if (activeTransport) {
@@ -604,13 +734,14 @@ async function connectPrinter() {
     } else if (type === 'network') {
       const ip = networkIpInput.value.trim();
       if (!ip) throw new Error('Please enter a valid WebSocket IP (e.g. ws://192.168.1.100:9100)');
+      localStorage.setItem('last-network-ip', ip);
       activeTransport = new NetworkPrinterTransport(ip);
     }
 
     connectPrinterBtn.textContent = 'Connecting...';
     connectPrinterBtn.disabled = true;
 
-    await activeTransport!.connect();
+    await activeTransport!.connect(existingDevice);
 
     printerStatus.textContent = 'Connected (' + type.toUpperCase() + ')';
     printerStatus.className = 'status connected';
@@ -1297,7 +1428,16 @@ printPreviewSend.addEventListener('click', async () => {
   }
 
   try {
-    await sendLinesToPrinter(printLines);
+    const cardToUse = lastClickedCard || cards[0];
+    const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
+    const title = cardToUse[titleKey] || 'Untitled Item';
+    try {
+      await sendLinesToPrinter(printLines);
+      addHistoryLog(cardToUse.id, title, 'success');
+    } catch (e: any) {
+      addHistoryLog(cardToUse.id, title, 'error', e.message);
+      throw e;
+    }
     closePrintPreviewModal();
 
     if (currentEditId) {
@@ -1360,9 +1500,62 @@ function updateCountdownDisplay() {
   countdownValue.textContent = `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+  templateProfileSelect.addEventListener('change', () => {
+    activeTemplateId = templateProfileSelect.value;
+    localStorage.setItem('active-template-id', activeTemplateId);
+  });
+
+  newTemplateBtn.addEventListener('click', () => {
+    const name = prompt('Enter a name for the new template profile:');
+    if (!name) return;
+    const id = 'template_' + Date.now();
+    const currentLines = templateProfiles[activeTemplateId]?.lines || [];
+    templateProfiles[id] = { id, name, lines: JSON.parse(JSON.stringify(currentLines)) };
+    activeTemplateId = id;
+    localStorage.setItem('active-template-id', activeTemplateId);
+    localStorage.setItem('template-profiles', JSON.stringify(templateProfiles));
+    renderTemplateProfiles();
+  });
+
+  deleteTemplateBtn.addEventListener('click', () => {
+    if (activeTemplateId === 'default') {
+      alert('Cannot delete the default template profile.');
+      return;
+    }
+    if (confirm(`Are you sure you want to delete profile "${templateProfiles[activeTemplateId].name}"?`)) {
+      delete templateProfiles[activeTemplateId];
+      activeTemplateId = 'default';
+      localStorage.setItem('active-template-id', activeTemplateId);
+      localStorage.setItem('template-profiles', JSON.stringify(templateProfiles));
+      renderTemplateProfiles();
+    }
+  });
+
+  viewHistoryBtn.addEventListener('click', () => {
+    settingsModal.classList.add('hidden');
+    renderHistory();
+    historyModal.classList.remove('hidden');
+  });
+
+  closeHistoryModal.addEventListener('click', () => {
+    historyModal.classList.add('hidden');
+  });
+
+  clearHistoryBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear the print history log?')) {
+      printHistory = [];
+      localStorage.removeItem('print-history');
+      renderHistory();
+    }
+  });
+
+  historyModal.addEventListener('click', (e) => {
+    if (e.target === historyModal) historyModal.classList.add('hidden');
+  });
+
 // Event Listeners
 fetchDataBtn.addEventListener('click', fetchData);
-connectPrinterBtn.addEventListener('click', connectPrinter);
+connectPrinterBtn.addEventListener('click', () => connectPrinter());
 searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputElement).value));
 
 settingsBtn.addEventListener('click', () => {
@@ -1391,12 +1584,12 @@ editTemplateBtn.addEventListener('click', async () => {
     return;
   }
   isTemplateMode = true;
-  printPreviewSend.textContent = '💾 Save Base Template';
+  printPreviewSend.textContent = '💾 Save Template';
   
-  const saved = localStorage.getItem('base-print-template');
   const sampleCard = lastClickedCard || cards[0];
-  if (saved) {
-    try { printLines = JSON.parse(saved); } catch(e) { printLines = generateDefaultTemplateLines(sampleCard); }
+  const profile = templateProfiles[activeTemplateId];
+  if (profile && profile.lines && profile.lines.length > 0) {
+    printLines = JSON.parse(JSON.stringify(profile.lines));
   } else {
     printLines = generateDefaultTemplateLines(sampleCard);
   }
@@ -1464,11 +1657,19 @@ printAllUnprintedBtn.addEventListener('click', async () => {
   
   try {
     for (const card of unprintedCards) {
-       const lines = await generatePrintLines(card);
-       await sendLinesToPrinter(lines);
+       const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
+       const title = card[titleKey] || 'Untitled Item';
        
-       printedIds.add(card.id);
-       localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+       try {
+         const lines = await generatePrintLines(card);
+         await sendLinesToPrinter(lines);
+         addHistoryLog(card.id, title, 'success');
+         printedIds.add(card.id);
+         localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+       } catch (e: any) {
+         addHistoryLog(card.id, title, 'error', e.message);
+         throw e; // Break loop on hardware error
+       }
        
        // Wait a tiny bit between receipts to prevent buffer overflow
        await new Promise(r => setTimeout(r, 500));

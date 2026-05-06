@@ -159,12 +159,26 @@
 
           <hr>
 
+          <!-- Template Profiles -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">📄 Template Profiles</h3>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+              <select id="template-profile-select" class="form-input" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+              </select>
+              <button class="btn secondary-btn" id="new-template-btn" title="Create New Profile">➕ New</button>
+              <button class="btn secondary-btn" id="delete-template-btn" title="Delete Profile">🗑️</button>
+            </div>
+            <button class="btn secondary-btn" id="edit-template-btn" style="width: 100%; padding: 10px;">⚙️ Edit Selected Template</button>
+          </div>
+
+          <hr>
+
           <!-- Management -->
           <div class="settings-section">
             <h3 style="margin-bottom: 10px;">🛠️ Management Tools</h3>
-            <div style="display: flex; gap: 10px;">
-              <button class="btn secondary-btn" id="edit-template-btn" style="flex: 1;">⚙️ Edit Base Template</button>
-              <button class="btn secondary-btn" id="export-printed-btn" style="flex: 1;">📋 Export Print Log</button>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <button class="btn secondary-btn" id="view-history-btn" style="width: 100%; padding: 10px;">🕒 View Print History</button>
+              <button class="btn secondary-btn" id="export-printed-btn" style="width: 100%; padding: 10px;">📋 Export Print Log (CSV)</button>
             </div>
           </div>
         </div>
@@ -203,6 +217,23 @@
             <button type="button" class="btn secondary-btn hidden" id="export-template-btn">💾 Export</button>
             <button type="button" class="btn secondary-btn" id="print-preview-cancel">Cancel</button>
             <button type="button" class="btn print-btn" id="print-preview-send">🖨️ Send to Printer</button>
+          </div>
+        </div>
+      </div>
+      <!-- Print History Modal -->
+      <div id="history-modal" class="modal hidden">
+        <div class="modal-content glass-panel" style="max-width: 600px;">
+          <div class="modal-header">
+            <h2>🕒 Print History Log</h2>
+            <span class="close-btn" id="close-history-modal">&times;</span>
+          </div>
+          <div class="modal-body">
+            <div id="history-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
+              <!-- History items injected here -->
+            </div>
+            <div style="margin-top: 15px; display: flex; justify-content: flex-end;">
+               <button class="btn secondary-btn" id="clear-history-btn">🗑️ Clear History</button>
+            </div>
           </div>
         </div>
       </div>
