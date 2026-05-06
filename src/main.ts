@@ -25,13 +25,13 @@ let isTemplateMode = false;
 let lastClickedCard: CardData | null = null;
 
 // Schema Mapping
-let activeSchemaId = localStorage.getItem('activeSchemaId') || 'DefaultCharity';
+let activeSchemaId = localStorage.getItem('activeSchemaId') || 'Charity';
 let schemaProfiles: Record<string, SchemaProfile> = JSON.parse(localStorage.getItem('schemaProfiles') || 'null');
 if (!schemaProfiles) {
   schemaProfiles = {
-    'DefaultCharity': {
-      id: 'DefaultCharity',
-      name: 'DefaultCharity',
+    'Charity': {
+      id: 'Charity',
+      name: 'Charity',
       variables: ["Item Name", "Item ID", "Donor", "Price", "Image", "Description", "Number"],
       mapping: {
         "Item Name": "What is a brief identifier for your donation?",
@@ -452,7 +452,13 @@ newSchemaBtn?.addEventListener('click', () => {
   const name = prompt('Enter a name for the new schema profile:');
   if (name && name.trim()) {
     const id = 'schema-' + Date.now();
-    schemaProfiles[id] = { id, name: name.trim(), variables: [], mapping: {} };
+    const currentProfile = schemaProfiles[activeSchemaId];
+    schemaProfiles[id] = { 
+      id, 
+      name: name.trim(), 
+      variables: currentProfile ? [...currentProfile.variables] : [], 
+      mapping: currentProfile ? { ...currentProfile.mapping } : {} 
+    };
     activeSchemaId = id;
     saveSchemaProfiles();
     renderSchemaMapper();
