@@ -159,6 +159,12 @@ function renderCards(filterText = '') {
     return;
   }
 
+  let printedIds: Set<string> = new Set();
+  try {
+    const saved = localStorage.getItem('printed-items');
+    if (saved) printedIds = new Set(JSON.parse(saved));
+  } catch(e) {}
+
   filtered.forEach(card => {
     const cardEl = document.createElement('div');
     cardEl.className = 'card';
@@ -200,7 +206,9 @@ function renderCards(filterText = '') {
       </div>
       <div class="card-actions">
         <button class="btn secondary-btn edit-btn" data-id="${card.id}">✏️ Edit</button>
-        <button class="btn print-btn print-item-btn" data-id="${card.id}">🖨️ Print</button>
+        <button class="btn print-btn print-item-btn ${printedIds.has(card.id) ? 'printed' : ''}" data-id="${card.id}">
+          ${printedIds.has(card.id) ? '✅ Printed' : '🖨️ Print'}
+        </button>
       </div>
     `;
 
@@ -957,13 +965,24 @@ printPreviewSend.addEventListener('click', async () => {
 
     closePrintPreviewModal();
 
-    // UI feedback on card
+    // UI feedback on card and persistent printed tracking
     if (currentEditId) {
+      // Mark as printed persistently
+      let printedIds: string[] = [];
+      try {
+        const saved = localStorage.getItem('printed-items');
+        if (saved) printedIds = JSON.parse(saved);
+      } catch(e) {}
+      
+      if (!printedIds.includes(currentEditId)) {
+        printedIds.push(currentEditId);
+        localStorage.setItem('printed-items', JSON.stringify(printedIds));
+      }
+
       const btn = document.querySelector(`.print-item-btn[data-id="${currentEditId}"]`) as HTMLButtonElement;
       if (btn) {
-        const originalText = btn.textContent;
-        btn.textContent = '✅ Printed!';
-        setTimeout(() => btn.textContent = originalText, 2000);
+        btn.textContent = '✅ Printed';
+        btn.classList.add('printed');
       }
     }
   } catch (err: any) {
