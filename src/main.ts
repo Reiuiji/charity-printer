@@ -3,86 +3,13 @@ import Papa from 'papaparse';
 import * as QRCode from 'qrcode';
 import * as bwipjs from 'bwip-js';
 
-interface CardData {
-  id: string; // Unique identifier
-  [key: string]: string;
-}
-
-interface PrinterTransport {
-  type: string;
-  connect(existingDevice?: any): Promise<void>;
-  disconnect(): Promise<void>;
-  write(data: Uint8Array): Promise<void>;
-}
-
-class SerialPrinterTransport implements PrinterTransport {
-  type = 'serial';
-  port: any | null = null;
-  async connect(existingPort?: any) {
-    this.port = existingPort || await (navigator as any).serial.requestPort();
-    await this.port.open({ baudRate: 9600 });
-  }
-  async disconnect() {
-    if (this.port) await this.port.close();
-  }
-  async write(data: Uint8Array) {
-    if (!this.port || !this.port.writable) throw new Error('Port not writable');
-    const writer = this.port.writable.getWriter();
-    await writer.write(data);
-    writer.releaseLock();
-  }
-}
-
-class UsbPrinterTransport implements PrinterTransport {
-  type = 'usb';
-  device: any | null = null;
-  outEndpoint: number = -1;
-  async connect(existingDevice?: any) {
-    this.device = existingDevice || await (navigator as any).usb.requestDevice({ filters: [] });
-    await this.device.open();
-    if (this.device.configuration === null) await this.device.selectConfiguration(1);
-    await this.device.claimInterface(0);
-    const iface = this.device.configuration.interfaces[0];
-    const alt = iface.alternates[0];
-    for (const ep of alt.endpoints) {
-      if (ep.direction === 'out' && ep.type === 'bulk') {
-        this.outEndpoint = ep.endpointNumber;
-      }
-    }
-  }
-  async disconnect() {
-    if (this.device) await this.device.close();
-  }
-  async write(data: Uint8Array) {
-    if (!this.device || this.outEndpoint === -1) throw new Error('USB Device not connected');
-    await this.device.transferOut(this.outEndpoint, data);
-  }
-}
-
-class NetworkPrinterTransport implements PrinterTransport {
-  type = 'network';
-  ws: WebSocket | null = null;
-  ip: string;
-  constructor(ip: string) {
-    this.ip = ip;
-  }
-  async connect() {
-    return new Promise<void>((resolve, reject) => {
-      let url = this.ip;
-      if (!url.startsWith('ws://')) url = 'ws://' + url;
-      this.ws = new WebSocket(url);
-      this.ws.onopen = () => resolve();
-      this.ws.onerror = () => reject(new Error('WebSocket connection failed'));
-    });
-  }
-  async disconnect() {
-    if (this.ws) this.ws.close();
-  }
-  async write(data: Uint8Array) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not open');
-    this.ws.send(data as any);
-  }
-}
+import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog } from './types';
+import type { PrinterTransport } from './transport';
+import { 
+  SerialPrinterTransport, 
+  UsbPrinterTransport, 
+  NetworkPrinterTransport 
+} from './transport';
 
 // Global state
 let cards: CardData[] = [];
@@ -96,24 +23,12 @@ let isTemplateMode = false;
 let lastClickedCard: CardData | null = null;
 
 // Template Profiles
-interface TemplateProfile {
-  id: string;
-  name: string;
-  lines: PrintLine[];
-}
 let activeTemplateId = 'default';
 let templateProfiles: Record<string, TemplateProfile> = {
   'default': { id: 'default', name: 'Default Template', lines: [] }
 };
 
 // History
-interface PrintHistoryLog {
-  timestamp: number;
-  id: string;
-  title: string;
-  status: 'success' | 'error';
-  errorMessage?: string;
-}
 let printHistory: PrintHistoryLog[] = [];
 
 // DOM Elements
@@ -776,20 +691,7 @@ async function connectPrinter(existingDevice?: any) {
 }
 
 // Print Preview System
-interface PrintLine {
-  id?: string;
-  enabled: boolean;
-  text: string;
-  bold: boolean;
-  align: 'left' | 'center' | 'right';
-  size: 'xl' | 'large' | 'normal' | 'small' | 'xs';
-  isSeparator?: boolean;
-  isImage?: boolean;
-  imageUrl?: string;
-  gamma?: number;
-  isQr?: boolean;
-  isBarcode?: boolean;
-}
+
 
 let printLines: PrintLine[] = [];
 
