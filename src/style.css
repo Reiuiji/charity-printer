@@ -631,6 +631,7 @@ body.light-theme select option {
   gap: 12px;
   justify-content: flex-end;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 /* Print Preview Modal */
@@ -684,6 +685,7 @@ body.light-theme select option {
   min-height: 200px;
   position: relative;
   filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.4));
+  flex-shrink: 0;
 }
 
 .receipt-paper::before {
@@ -759,6 +761,7 @@ body.light-theme select option {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .print-line-top input[type="checkbox"] {
@@ -784,6 +787,7 @@ body.light-theme select option {
   padding: 4px;
   opacity: 0.6;
   transition: opacity 0.2s;
+  margin-left: auto;
 }
 
 .print-line-top .remove-line-btn:hover {
@@ -837,4 +841,73 @@ body.light-theme select option {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .glass-header {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    align-items: stretch;
+    text-align: center;
+  }
+  
+  .header-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .controls-bar {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+  
+  #search-input {
+    width: 100% !important;
+  }
+  
+  .filter-tabs {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100%, 1fr));
+  }
+
+  .print-preview-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  .receipt-paper-wrap {
+    flex: 0 0 40vh;
+    min-height: 40vh;
+    padding-bottom: 16px;
+    overflow-y: auto;
+  }
+
+  .modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+  
+  .modal-print-preview {
+    max-height: 95vh;
+  }
+  
+  .print-controls {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 20px;
+  }
 }
