@@ -4,6 +4,7 @@ import * as QRCode from 'qrcode';
 import * as bwipjs from 'bwip-js';
 
 import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog } from './types';
+import { sendLinesToPrinter as _sendLinesToPrinter } from './printer';
 import type { PrinterTransport } from './transport';
 import { 
   SerialPrinterTransport, 
@@ -46,6 +47,7 @@ const importAppBackupBtn = document.getElementById('import-app-backup-btn') as H
 const appBackupFileInput = document.getElementById('app-backup-file-input') as HTMLInputElement;
 const printerStatus = document.getElementById('printer-status') as HTMLDivElement;
 const printerStatusText = document.getElementById('printer-status-text') as HTMLSpanElement;
+const feedLinesInput = document.getElementById('feed-lines-input') as HTMLInputElement;
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
 const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanElement;
@@ -1253,75 +1255,25 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
 // Send to Printer from preview
 async function sendLinesToPrinter(lines: PrintLine[]) {
   if (!activeTransport) throw new Error('Printer not connected! Please connect the printer first.');
-  const enabledLines = lines.filter(l => l.enabled);
-  if (enabledLines.length === 0) return;
+  const feedLines = parseInt(feedLinesInput.value, 10) || 4;
 
-  const ESC = 0x1B;
-  const GS = 0x1D;
-  const textEncoder = new TextEncoder();
-
-  try {
-    // Init printer
-    await activeTransport.write(new Uint8Array([ESC, 0x40]));
-
-    for (const line of enabledLines) {
-      if (line.isImage && line.imageUrl) {
-        const originalText = printPreviewSend.textContent;
-        printPreviewSend.textContent = 'Preparing Image...';
-        
-        const rasterData = await convertImageToRaster(line.imageUrl, line.gamma || 1.0);
-        if (rasterData) {
-          const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
-          await activeTransport.write(new Uint8Array([ESC, 0x61, alignByte]));
-          await activeTransport.write(rasterData);
-        } else {
-          alert('Could not download or convert image: ' + line.imageUrl);
-        }
-        
-        if (printPreviewSend.textContent === 'Preparing Image...') {
-          printPreviewSend.textContent = originalText;
-        }
+  for (const line of lines) {
+    if (line.enabled && line.isImage && line.imageUrl && !line.isQr && !line.isBarcode && !line.rasterData) {
+      const originalText = printPreviewSend.textContent;
+      printPreviewSend.textContent = 'Preparing Image...';
+      const rasterData = await convertImageToRaster(line.imageUrl, line.gamma || 1.0);
+      if (rasterData) {
+        line.rasterData = rasterData;
       } else {
-        // Alignment
-        const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
-        await activeTransport.write(new Uint8Array([ESC, 0x61, alignByte]));
-
-        // Size and Font
-        if (line.size === 'xl') {
-          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
-          await activeTransport.write(new Uint8Array([GS, 0x21, 0x22]));  // Triple height/width
-        } else if (line.size === 'large') {
-          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
-          await activeTransport.write(new Uint8Array([GS, 0x21, 0x11]));  // Double height/width
-        } else if (line.size === 'small') {
-          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
-          await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
-        } else if (line.size === 'xs') {
-          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
-          await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
-        } else {
-          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
-          await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
-        }
-
-        // Bold
-        await activeTransport.write(new Uint8Array([ESC, 0x45, line.bold ? 0x01 : 0x00]));
-
-        // Text
-        await activeTransport.write(textEncoder.encode(line.text + '\n'));
+        alert('Could not download or convert image: ' + line.imageUrl);
+      }
+      if (printPreviewSend.textContent === 'Preparing Image...') {
+        printPreviewSend.textContent = originalText;
       }
     }
-
-    // Reset
-    await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
-    await activeTransport.write(new Uint8Array([ESC, 0x45, 0x00]));
-
-    // Feed & cut
-    await activeTransport.write(new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]));
-    await activeTransport.write(new Uint8Array([GS, 0x56, 0x41, 0x10]));
-  } catch (err: any) {
-    alert('Print error: ' + err.message);
   }
+
+  await _sendLinesToPrinter(lines, activeTransport, feedLines);
 }
 
 // Send to Printer from preview
