@@ -104,6 +104,10 @@ const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButton
 const testPrinterBtn = document.getElementById('test-printer-btn') as HTMLButtonElement;
 const exportPrintedBtn = document.getElementById('export-printed-btn') as HTMLButtonElement;
 const printerStatus = document.getElementById('printer-status') as HTMLDivElement;
+const printerStatusText = document.getElementById('printer-status-text') as HTMLSpanElement;
+const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
+const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
+const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanElement;
 const cardsContainer = document.getElementById('cards-container') as HTMLDivElement;
 const searchInput = document.getElementById('search-input') as HTMLInputElement;
 const lastSyncTime = document.getElementById('last-sync-time') as HTMLSpanElement;
@@ -181,6 +185,7 @@ function init() {
   // Check support warnings, but don't disable since they might use Network
   if (!('serial' in navigator) && !('usb' in navigator)) {
     printerStatus.textContent = 'Web Serial/USB APIs not supported (HTTPS required)';
+    printerStatusText.textContent = 'APIs not supported';
   }
 }
 
@@ -564,11 +569,15 @@ async function connectPrinter() {
 
     printerStatus.textContent = 'Connected (' + type.toUpperCase() + ')';
     printerStatus.className = 'status connected';
+    printerStatusText.textContent = 'Connected (' + type.toUpperCase() + ')';
+    printerStatusText.className = 'status connected';
     
     if (type === 'serial' && (activeTransport as SerialPrinterTransport).port) {
       (activeTransport as SerialPrinterTransport).port.addEventListener('disconnect', () => {
         printerStatus.textContent = 'Disconnected';
         printerStatus.className = 'status disconnected';
+        printerStatusText.textContent = 'Disconnected';
+        printerStatusText.className = 'status disconnected';
         activeTransport = null;
       });
     }
@@ -578,6 +587,8 @@ async function connectPrinter() {
     alert('Failed to connect to printer: ' + err.message);
     printerStatus.textContent = 'Disconnected';
     printerStatus.className = 'status disconnected';
+    printerStatusText.textContent = 'Disconnected';
+    printerStatusText.className = 'status disconnected';
     activeTransport = null;
   } finally {
     connectPrinterBtn.innerHTML = '<span class="icon">🖨️</span> Connect';
@@ -1307,6 +1318,16 @@ function updateCountdownDisplay() {
 fetchDataBtn.addEventListener('click', fetchData);
 connectPrinterBtn.addEventListener('click', connectPrinter);
 searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputElement).value));
+
+settingsBtn.addEventListener('click', () => {
+  settingsModal.classList.remove('hidden');
+});
+closeSettingsBtn.addEventListener('click', () => {
+  settingsModal.classList.add('hidden');
+});
+settingsModal.addEventListener('click', (e) => {
+  if (e.target === settingsModal) settingsModal.classList.add('hidden');
+});
 
 document.querySelectorAll('.filter-tab').forEach(tab => {
   tab.addEventListener('click', (e) => {

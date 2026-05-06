@@ -11,72 +11,14 @@
     <div id="app">
       <header class="glass-header">
         <h1>Receipt Printer Dashboard</h1>
-        <div class="header-controls" style="display: flex; gap: 10px; align-items: center;">
-          <button id="theme-toggle-btn" class="btn secondary-btn" style="padding: 8px;">☀️</button>
-          <button id="test-printer-btn" class="btn secondary-btn">🧪 Test Print</button>
-          <div style="display: flex; gap: 8px; align-items: center; background: var(--glass-bg); padding: 4px; border-radius: 8px; border: 1px solid var(--glass-border);">
-            <select id="connection-type" style="background: transparent; color: var(--text-main); border: none; outline: none; padding: 4px; font-family: inherit;">
-              <option value="serial" style="color: #000;">Web Serial</option>
-              <option value="usb" style="color: #000;">Web USB</option>
-              <option value="network" style="color: #000;">Network / Wi-Fi</option>
-            </select>
-            <input type="text" id="network-ip" placeholder="ws://192.168.1.100:9100" class="hidden" style="padding: 6px; border-radius: 4px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-main); width: 180px;" />
-            <button id="connect-printer-btn" class="btn primary-btn" style="padding: 6px 12px; font-size: 0.9rem;">
-              <span class="icon">🖨️</span> Connect
-            </button>
-          </div>
+        <div class="header-controls" style="display: flex; gap: 15px; align-items: center;">
           <div id="printer-status" class="status disconnected">Disconnected</div>
+          <button id="theme-toggle-btn" class="btn secondary-btn" style="padding: 8px;">☀️</button>
+          <button id="settings-btn" class="btn secondary-btn" style="padding: 8px 12px; font-size: 1.1rem;" title="Settings">⚙️ Settings</button>
         </div>
       </header>
 
-      <main class="dashboard">
-        <aside class="sidebar glass-panel">
-          <h2>Data Source</h2>
-          <div class="input-group">
-            <label for="csv-url">Google Sheets Published CSV URL</label>
-            <input type="text" id="csv-url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv" />
-          </div>
-          <button id="fetch-data-btn" class="btn secondary-btn">Fetch Data</button>
-          
-          <hr />
-
-          <div class="auto-sync-section">
-            <div class="auto-sync-header">
-              <label for="auto-sync-toggle">Auto Sync</label>
-              <label class="toggle-switch">
-                <input type="checkbox" id="auto-sync-toggle" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-            <div class="auto-sync-header" style="margin-top: 10px; margin-bottom: 10px;">
-              <label for="auto-print-toggle" style="color: var(--secondary-color); font-weight: 600;">Auto-Print 🖨️</label>
-              <label class="toggle-switch">
-                <input type="checkbox" id="auto-print-toggle" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-            <div class="input-group">
-              <label for="sync-interval">Interval</label>
-              <select id="sync-interval">
-                <option value="1">1 minute</option>
-                <option value="2">2 minutes</option>
-                <option value="5" selected>5 minutes</option>
-                <option value="10">10 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes</option>
-              </select>
-            </div>
-            <div id="countdown-display" class="countdown hidden">
-              Next sync in <span id="countdown-value">--:--</span>
-            </div>
-          </div>
-
-          <hr />
-          
-          <div class="sync-info">
-            <small>Last synced: <span id="last-sync-time">Never</span></small>
-          </div>
-        </aside>
+      <main class="dashboard" style="grid-template-columns: 1fr;">
 
         <section class="content">
           <div class="controls-bar" style="display: flex; gap: 15px; flex-wrap: wrap;">
@@ -92,8 +34,6 @@
               <div class="search-box">
                 <input type="text" id="search-input" placeholder="Search items..." />
               </div>
-              <button class="btn secondary-btn" id="export-printed-btn">📋 Export Log</button>
-              <button class="btn secondary-btn" id="edit-template-btn">⚙️ Edit Base Template</button>
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>
           </div>
@@ -139,7 +79,89 @@
         </div>
       </div>
 
-      <!-- Print Preview Modal -->
+      <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content glass-panel" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2>⚙️ Settings & Configuration</h2>
+          <span class="close-btn" id="close-settings">&times;</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- Hardware Connection -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">🖨️ Printer Connection</h3>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <select id="connection-type" class="form-input" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+                <option value="serial" style="color: #000;">Web Serial</option>
+                <option value="usb" style="color: #000;">Web USB</option>
+                <option value="network" style="color: #000;">Network / Wi-Fi</option>
+              </select>
+              <input type="text" id="network-ip" placeholder="ws://192.168.1.100:9100" class="hidden form-input" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border);" />
+              <button id="connect-printer-btn" class="btn primary-btn"><span class="icon">🔗</span> Connect</button>
+              <button id="test-printer-btn" class="btn secondary-btn">🧪 Test Print</button>
+            </div>
+            <div style="margin-top: 10px;">Status: <span id="printer-status-text" class="status disconnected">Disconnected</span></div>
+          </div>
+
+          <hr>
+
+          <!-- Data Source -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">📊 Data Source</h3>
+            <div class="input-group">
+              <label for="csv-url">Google Sheets Published CSV URL</label>
+              <div style="display: flex; gap: 10px;">
+                <input type="text" id="csv-url" placeholder="https://docs.google.com/..." style="flex: 1;" />
+                <button id="fetch-data-btn" class="btn secondary-btn">Fetch Data</button>
+              </div>
+            </div>
+            <div style="margin-top: 5px; font-size: 0.85rem; color: var(--text-muted);">
+              Last synced: <span id="last-sync-time">Never</span>
+            </div>
+          </div>
+
+          <hr>
+
+          <!-- Automation -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">⚙️ Automation</h3>
+            <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <div class="auto-sync-header" style="flex: 1; min-width: 200px; display: flex; justify-content: space-between;">
+                <label for="auto-sync-toggle">Auto Sync Data</label>
+                <label class="toggle-switch"><input type="checkbox" id="auto-sync-toggle" /><span class="toggle-slider"></span></label>
+              </div>
+              <div class="input-group" style="flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                <label>Interval</label>
+                <select id="sync-interval" class="form-input" style="padding: 6px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border);">
+                  <option value="1" style="color: #000;">1 min</option><option value="2" style="color: #000;">2 mins</option><option value="5" selected style="color: #000;">5 mins</option><option value="10" style="color: #000;">10 mins</option><option value="15" style="color: #000;">15 mins</option>
+                </select>
+              </div>
+            </div>
+            <div id="countdown-display" class="countdown hidden" style="margin-top: 5px; font-size: 0.85rem;">
+              Next sync in <span id="countdown-value">--:--</span>
+            </div>
+
+            <div class="auto-sync-header" style="margin-top: 15px; display: flex; justify-content: space-between;">
+              <label for="auto-print-toggle" style="color: var(--secondary-color); font-weight: 600;">Auto-Print New Items 🖨️</label>
+              <label class="toggle-switch"><input type="checkbox" id="auto-print-toggle" /><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+
+          <hr>
+
+          <!-- Management -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">🛠️ Management Tools</h3>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn secondary-btn" id="edit-template-btn" style="flex: 1;">⚙️ Edit Base Template</button>
+              <button class="btn secondary-btn" id="export-printed-btn" style="flex: 1;">📋 Export Print Log</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Print Preview Modal -->
       <div id="print-preview-modal" class="modal hidden">
         <div class="modal-content modal-print-preview glass-panel">
           <span class="close-btn" id="close-print-preview">&times;</span>
