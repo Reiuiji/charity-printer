@@ -27,7 +27,7 @@
             <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
               <h2 style="margin: 0;">Items</h2>
               <div class="search-box">
-                <input type="text" id="search-input" placeholder="Search items..." style="padding: 8px; width: 250px;" />
+                <input type="text" id="search-input" placeholder="Search for items..." style="padding: 8px; width: 250px;" />
               </div>
               <div class="filter-tabs" id="filter-tabs">
                 <button class="filter-tab active" data-filter="all">All</button>
@@ -92,15 +92,23 @@
           <!-- Hardware Connection -->
           <div class="settings-section">
             <h3 style="margin-bottom: 10px;">🖨️ Printer Connection</h3>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <select id="connection-type" class="form-input" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <select id="connection-type" class="form-input" style="padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
                 <option value="serial" style="color: #000;">Web Serial</option>
                 <option value="usb" style="color: #000;">Web USB</option>
                 <option value="network" style="color: #000;">Network / Wi-Fi</option>
               </select>
-              <input type="text" id="network-ip" placeholder="ws://192.168.1.100:9100" class="hidden form-input" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border);" />
-              <button id="connect-printer-btn" class="btn primary-btn"><span class="icon">🔗</span> Connect</button>
-              <button id="test-printer-btn" class="btn secondary-btn">🧪 Test Print</button>
+              
+              <div id="connection-description" style="font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.1); padding: 8px; border-radius: 4px; border-left: 3px solid var(--primary-color);">
+                Connect to a virtual COM port. Supported in Chrome and Edge.
+              </div>
+
+              <input type="text" id="network-ip" placeholder="ws://192.168.1.100:9100" class="hidden form-input" style="padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border);" />
+              
+              <div style="display: flex; gap: 10px;">
+                <button id="connect-printer-btn" class="btn primary-btn" style="flex: 1;"><span class="icon">🔗</span> Connect</button>
+                <button id="test-printer-btn" class="btn secondary-btn" style="flex: 1;">🧪 Test Print</button>
+              </div>
             </div>
             <div style="margin-top: 10px;">Status: <span id="printer-status-text" class="status disconnected">Disconnected</span></div>
           </div>

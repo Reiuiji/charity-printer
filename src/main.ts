@@ -98,6 +98,7 @@ let isTemplateMode = false;
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
 const fetchDataBtn = document.getElementById('fetch-data-btn') as HTMLButtonElement;
 const connectionTypeSelect = document.getElementById('connection-type') as HTMLSelectElement;
+const connectionDescription = document.getElementById('connection-description') as HTMLDivElement;
 const networkIpInput = document.getElementById('network-ip') as HTMLInputElement;
 const connectPrinterBtn = document.getElementById('connect-printer-btn') as HTMLButtonElement;
 const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement;
@@ -203,13 +204,23 @@ function init() {
   }
 
   // Initialize connection UI
-  connectionTypeSelect.addEventListener('change', () => {
-    if (connectionTypeSelect.value === 'network') {
+  function updateConnectionUI() {
+    const val = connectionTypeSelect.value;
+    if (val === 'network') {
       networkIpInput.classList.remove('hidden');
+      connectionDescription.textContent = 'Connect via local Wi-Fi or LAN. Enter the raw WebSocket IP and Port of your thermal printer.';
     } else {
       networkIpInput.classList.add('hidden');
+      if (val === 'serial') {
+        connectionDescription.textContent = 'Connect to a virtual COM port. Supported in Chrome and Edge.';
+      } else if (val === 'usb') {
+        connectionDescription.textContent = 'Connect directly to raw USB bulk endpoints. Bypasses the need for OS-level serial drivers.';
+      }
     }
-  });
+  }
+
+  connectionTypeSelect.addEventListener('change', updateConnectionUI);
+  updateConnectionUI();
 
   // Check support warnings, but don't disable since they might use Network
   if (!('serial' in navigator) && !('usb' in navigator)) {
