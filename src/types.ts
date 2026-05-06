@@ -28,6 +28,13 @@ export interface TemplateProfile {
 
 export type SchemaMapping = Record<string, string>; // e.g. { "Item Name": "Brief Identifier" }
 
+export interface SchemaProfile {
+  id: string;
+  name: string;
+  variables: string[];
+  mapping: SchemaMapping;
+}
+
 export type TemplateAssignments = Record<string, string>; // e.g. { "card-id-123": "template-id-456" }
 
 export interface PrintHistoryLog {

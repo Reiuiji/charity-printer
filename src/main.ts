@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import * as QRCode from 'qrcode';
 import * as bwipjs from 'bwip-js';
 
-import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog, TemplateAssignments } from './types';
+import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog, TemplateAssignments, SchemaProfile } from './types';
 import { generateDefaultTemplateLines, generatePrintLines, interpolate } from './template';
 import { sendLinesToPrinter as _sendLinesToPrinter } from './printer';
 import type { PrinterTransport } from './transport';
@@ -25,8 +25,26 @@ let isTemplateMode = false;
 let lastClickedCard: CardData | null = null;
 
 // Schema Mapping
-let schemaMapping: Record<string, string> = JSON.parse(localStorage.getItem('schemaMapping') || '{}');
-let abstractVariables: string[] = JSON.parse(localStorage.getItem('abstractVariables') || '["Item Name", "Item ID", "Donor", "Price", "Image"]');
+let activeSchemaId = localStorage.getItem('activeSchemaId') || 'DefaultCharity';
+let schemaProfiles: Record<string, SchemaProfile> = JSON.parse(localStorage.getItem('schemaProfiles') || 'null');
+if (!schemaProfiles) {
+  schemaProfiles = {
+    'DefaultCharity': {
+      id: 'DefaultCharity',
+      name: 'DefaultCharity',
+      variables: ["Item Name", "Item ID", "Donor", "Price", "Image", "Description", "Number"],
+      mapping: {
+        "Item Name": "What is a brief identifier for your donation?",
+        "Item ID": "id",
+        "Donor": "What is your Community Name?",
+        "Price": "What would you like the starting bid for your item to be?",
+        "Image": "Please take a picture of your donation",
+        "Description": "Please Describe your donation",
+        "Number": "Donation #"
+      }
+    }
+  };
+}
 let templateAssignments: TemplateAssignments = JSON.parse(localStorage.getItem('templateAssignments') || '{}');
 
 // Template Profiles
@@ -50,6 +68,7 @@ const testPrinterBtn = document.getElementById('test-printer-btn') as HTMLButton
 const exportPrintedBtn = document.getElementById('export-printed-btn') as HTMLButtonElement;
 const exportAppBackupBtn = document.getElementById('export-app-backup-btn') as HTMLButtonElement;
 const importAppBackupBtn = document.getElementById('import-app-backup-btn') as HTMLButtonElement;
+const resetAppBtn = document.getElementById('reset-app-btn') as HTMLButtonElement;
 const appBackupFileInput = document.getElementById('app-backup-file-input') as HTMLInputElement;
 const printerStatus = document.getElementById('printer-status') as HTMLDivElement;
 const printerStatusText = document.getElementById('printer-status-text') as HTMLSpanElement;
@@ -69,6 +88,9 @@ const countdownDisplay = document.getElementById('countdown-display') as HTMLDiv
 const countdownValue = document.getElementById('countdown-value') as HTMLSpanElement;
 
 // Schema Mapper
+const schemaProfileSelect = document.getElementById('schema-profile-select') as HTMLSelectElement;
+const newSchemaBtn = document.getElementById('new-schema-btn') as HTMLButtonElement;
+const deleteSchemaBtn = document.getElementById('delete-schema-btn') as HTMLButtonElement;
 const schemaMapperContainer = document.getElementById('schema-mapper-container') as HTMLDivElement;
 const addSchemaVarBtn = document.getElementById('add-schema-var-btn') as HTMLButtonElement;
 
@@ -305,13 +327,24 @@ function saveCards() {
   localStorage.setItem('cards-data', JSON.stringify(cards));
 }
 
-function saveSchemaMapping() {
-  localStorage.setItem('schemaMapping', JSON.stringify(schemaMapping));
-  localStorage.setItem('abstractVariables', JSON.stringify(abstractVariables));
+function saveSchemaProfiles() {
+  localStorage.setItem('schemaProfiles', JSON.stringify(schemaProfiles));
+  localStorage.setItem('activeSchemaId', activeSchemaId);
 }
 
 function renderSchemaMapper() {
-  if (!schemaMapperContainer) return;
+  if (!schemaMapperContainer || !schemaProfileSelect) return;
+  
+  schemaProfileSelect.innerHTML = '';
+  for (const profile of Object.values(schemaProfiles)) {
+    const opt = document.createElement('option');
+    opt.value = profile.id;
+    opt.textContent = profile.name;
+    opt.style.color = '#000';
+    if (profile.id === activeSchemaId) opt.selected = true;
+    schemaProfileSelect.appendChild(opt);
+  }
+
   schemaMapperContainer.innerHTML = '';
   
   if (cards.length === 0) {
@@ -320,8 +353,10 @@ function renderSchemaMapper() {
   }
   
   const csvHeaders = Object.keys(cards[0]);
+  const currentProfile = schemaProfiles[activeSchemaId];
+  if (!currentProfile) return;
   
-  abstractVariables.forEach((variable, index) => {
+  currentProfile.variables.forEach((variable, index) => {
     const row = document.createElement('div');
     row.style.display = 'flex';
     row.style.gap = '10px';
@@ -341,13 +376,13 @@ function renderSchemaMapper() {
     varInput.placeholder = 'Internal Var';
     
     varInput.addEventListener('change', () => {
-       const oldVar = abstractVariables[index];
+       const oldVar = currentProfile.variables[index];
        const newVar = varInput.value.trim() || oldVar;
-       abstractVariables[index] = newVar;
+       currentProfile.variables[index] = newVar;
        if (oldVar !== newVar) {
-         schemaMapping[newVar] = schemaMapping[oldVar];
-         delete schemaMapping[oldVar];
-         saveSchemaMapping();
+         currentProfile.mapping[newVar] = currentProfile.mapping[oldVar];
+         delete currentProfile.mapping[oldVar];
+         saveSchemaProfiles();
        }
     });
 
@@ -380,11 +415,11 @@ function renderSchemaMapper() {
       headerSelect.appendChild(opt);
     });
     
-    headerSelect.value = schemaMapping[variable] || '';
+    headerSelect.value = currentProfile.mapping[variable] || '';
     
     headerSelect.addEventListener('change', () => {
-      schemaMapping[abstractVariables[index]] = headerSelect.value;
-      saveSchemaMapping();
+      currentProfile.mapping[currentProfile.variables[index]] = headerSelect.value;
+      saveSchemaProfiles();
     });
 
     const removeBtn = document.createElement('button');
@@ -392,9 +427,9 @@ function renderSchemaMapper() {
     removeBtn.className = 'remove-line-btn';
     removeBtn.style.padding = '4px 8px';
     removeBtn.addEventListener('click', () => {
-       delete schemaMapping[abstractVariables[index]];
-       abstractVariables.splice(index, 1);
-       saveSchemaMapping();
+       delete currentProfile.mapping[currentProfile.variables[index]];
+       currentProfile.variables.splice(index, 1);
+       saveSchemaProfiles();
        renderSchemaMapper();
     });
     
@@ -407,10 +442,42 @@ function renderSchemaMapper() {
   });
 }
 
+schemaProfileSelect?.addEventListener('change', (e) => {
+  activeSchemaId = (e.target as HTMLSelectElement).value;
+  saveSchemaProfiles();
+  renderSchemaMapper();
+});
+
+newSchemaBtn?.addEventListener('click', () => {
+  const name = prompt('Enter a name for the new schema profile:');
+  if (name && name.trim()) {
+    const id = 'schema-' + Date.now();
+    schemaProfiles[id] = { id, name: name.trim(), variables: [], mapping: {} };
+    activeSchemaId = id;
+    saveSchemaProfiles();
+    renderSchemaMapper();
+  }
+});
+
+deleteSchemaBtn?.addEventListener('click', () => {
+  if (Object.keys(schemaProfiles).length <= 1) {
+    alert('You must have at least one schema profile.');
+    return;
+  }
+  if (confirm(`Delete schema profile "${schemaProfiles[activeSchemaId]?.name}"?`)) {
+    delete schemaProfiles[activeSchemaId];
+    activeSchemaId = Object.keys(schemaProfiles)[0];
+    saveSchemaProfiles();
+    renderSchemaMapper();
+  }
+});
+
 addSchemaVarBtn?.addEventListener('click', () => {
-  const newVar = `Var ${abstractVariables.length + 1}`;
-  abstractVariables.push(newVar);
-  saveSchemaMapping();
+  const currentProfile = schemaProfiles[activeSchemaId];
+  if (!currentProfile) return;
+  const newVar = `Var ${currentProfile.variables.length + 1}`;
+  currentProfile.variables.push(newVar);
+  saveSchemaProfiles();
   renderSchemaMapper();
 });
 
@@ -864,7 +931,8 @@ async function getPrintLinesForCard(card: CardData): Promise<PrintLine[]> {
   if (!baseLines.length) {
     baseLines = generateDefaultTemplateLines(card, shortLabel);
   }
-  return await generatePrintLines(card, baseLines, updateBarcodeQrImage, schemaMapping, abstractVariables);
+  const currentSchema = schemaProfiles[activeSchemaId];
+  return await generatePrintLines(card, baseLines, updateBarcodeQrImage, currentSchema?.mapping, currentSchema?.variables);
 }
 
 async function openPrintPreview(id: string) {
@@ -906,7 +974,8 @@ function updateReceiptPaper() {
       
       let src = line.imageUrl;
       if (isTemplateMode && cards.length > 0 && !line.isQr && !line.isBarcode) {
-        src = interpolate(src, lastClickedCard || cards[0], schemaMapping, abstractVariables);
+        const currentSchema = schemaProfiles[activeSchemaId];
+        src = interpolate(src, lastClickedCard || cards[0], currentSchema?.mapping, currentSchema?.variables);
       }
       img.src = src;
       
@@ -929,7 +998,8 @@ function updateReceiptPaper() {
     if (line.size === 'xs') div.classList.add('size-xs');
     if (line.isSeparator) div.classList.add('separator');
     
-    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, lastClickedCard || cards[0], schemaMapping, abstractVariables) : line.text;
+    const currentSchema = schemaProfiles[activeSchemaId];
+    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, lastClickedCard || cards[0], currentSchema?.mapping, currentSchema?.variables) : line.text;
     receiptPaper.appendChild(div);
   });
 }
@@ -1210,7 +1280,8 @@ function savePrintTemplate() {
 }
 
 async function updateBarcodeQrImage(line: PrintLine, index: number) {
-  const evalText = (isTemplateMode && cards.length > 0) ? interpolate(line.text || ' ', cards[0], schemaMapping, abstractVariables) : (line.text || ' ');
+  const currentSchema = schemaProfiles[activeSchemaId];
+  const evalText = (isTemplateMode && cards.length > 0) ? interpolate(line.text || ' ', cards[0], currentSchema?.mapping, currentSchema?.variables) : (line.text || ' ');
   if (line.isQr) {
     try {
       line.imageUrl = await QRCode.toDataURL(evalText, { width: 250, margin: 2, scale: 4 });
@@ -1809,6 +1880,8 @@ exportAppBackupBtn.addEventListener('click', () => {
     'csv-url': localStorage.getItem('csv-url'),
     'template-profiles': localStorage.getItem('template-profiles'),
     'active-template-id': localStorage.getItem('active-template-id'),
+    'schemaProfiles': localStorage.getItem('schemaProfiles'),
+    'activeSchemaId': localStorage.getItem('activeSchemaId'),
     'print-history': localStorage.getItem('print-history'),
     'printed-items': localStorage.getItem('printed-items'),
     'auto-sync': localStorage.getItem('auto-sync'),
@@ -1854,6 +1927,14 @@ appBackupFileInput.addEventListener('change', (e) => {
     }
   };
   reader.readAsText(file);
+});
+
+// Reset Factory Defaults
+resetAppBtn?.addEventListener('click', () => {
+  if (confirm('⚠️ WARNING: This will completely wipe all your templates, mappings, data, and settings! This cannot be undone. Are you absolutely sure?')) {
+    localStorage.clear();
+    location.reload();
+  }
 });
 
 // Init

@@ -150,6 +150,12 @@
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
               Map your raw CSV columns to standard internal variables so your templates never break.
             </p>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+              <select id="schema-profile-select" class="form-input" style="flex: 1; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+              </select>
+              <button class="btn secondary-btn" id="new-schema-btn" title="Create New Schema Profile">➕ New</button>
+              <button class="btn secondary-btn" id="delete-schema-btn" title="Delete Schema Profile">🗑️</button>
+            </div>
             <div id="schema-mapper-container" style="display: flex; flex-direction: column; gap: 8px;">
               <!-- Javascript will inject schema mapper UI here -->
               <em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure mapping.</em>
@@ -211,6 +217,7 @@
                 <button class="btn secondary-btn" id="import-app-backup-btn" style="flex: 1; padding: 10px;">📂 Restore Backup</button>
                 <input type="file" id="app-backup-file-input" accept=".json" class="hidden" />
               </div>
+              <button class="btn secondary-btn" id="reset-app-btn" style="width: 100%; padding: 10px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); margin-top: 5px;">⚠️ Reset Factory Defaults</button>
             </div>
           </div>
         </div>
