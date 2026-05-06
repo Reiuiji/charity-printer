@@ -4,6 +4,7 @@ import * as QRCode from 'qrcode';
 import * as bwipjs from 'bwip-js';
 
 import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog } from './types';
+import { generateDefaultTemplateLines, generatePrintLines, interpolate } from './template';
 import { sendLinesToPrinter as _sendLinesToPrinter } from './printer';
 import type { PrinterTransport } from './transport';
 import { 
@@ -306,7 +307,7 @@ async function autoPrintNewItems() {
      const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
      const title = card[titleKey] || 'Untitled Item';
      try {
-       const lines = await generatePrintLines(card);
+       const lines = await getPrintLinesForCard(card);
        await sendLinesToPrinter(lines);
        
        addHistoryLog(card.id, title, 'success');
@@ -714,74 +715,12 @@ const importTemplateBtn = document.getElementById('import-template-btn') as HTML
 const exportTemplateBtn = document.getElementById('export-template-btn') as HTMLButtonElement;
 const importTemplateFile = document.getElementById('import-template-file') as HTMLInputElement;
 
-function escapeRegExp(string: string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function interpolate(templateString: string, card: any): string {
-  if (!templateString) return '';
-  let result = templateString;
-  for (const [key, value] of Object.entries(card)) {
-    const escapedKey = escapeRegExp(key);
-    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
-    result = result.replace(regex, (value as string) || '');
-  }
-  return result;
-}
-
-function generateDefaultTemplateLines(card: any): PrintLine[] {
-  const titleKey = Object.keys(card).find(k => 
-    k.toLowerCase().includes('brief identifier') || 
-    k.toLowerCase().match(/name|title|item/)
-  ) || Object.keys(card)[0];
-  
-  const lines: PrintLine[] = [];
-  lines.push({ enabled: true, text: `{{${titleKey}}}`, bold: true, align: 'center', size: 'large' });
-  const donationKey = Object.keys(card).find(k => k.toLowerCase().includes('donation')) || 'id';
-  lines.push({ enabled: true, text: `Donation #{{${donationKey}}}`, bold: false, align: 'center', size: 'normal' });
-  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
-
-  for (const key of Object.keys(card)) {
-    if (key === 'id' || key === titleKey || key === donationKey) continue;
-    const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
-    if (isPhotoColumn) {
-      lines.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{${key}}}`, gamma: 1.0 });
-      continue;
-    }
-    lines.push({ enabled: true, text: `${shortLabel(key)}: {{${key}}}`, bold: false, align: 'left', size: 'normal' });
-  }
-
-  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
-  return lines;
-}
-
-async function generatePrintLines(card: any): Promise<PrintLine[]> {
-  const saved = localStorage.getItem('base-print-template');
-  let baseLines: PrintLine[] = [];
-  if (saved) {
-    try { baseLines = JSON.parse(saved); } catch(e) {}
-  }
+async function getPrintLinesForCard(card: CardData): Promise<PrintLine[]> {
+  let baseLines = templateProfiles[activeTemplateId]?.lines || [];
   if (!baseLines.length) {
-    baseLines = generateDefaultTemplateLines(card);
+    baseLines = generateDefaultTemplateLines(card, shortLabel);
   }
-
-  const lines: PrintLine[] = [];
-  for (const tLine of baseLines) {
-    const line = { ...tLine };
-    if (!line.enabled) continue;
-    
-    line.text = interpolate(line.text, card);
-    if (line.isImage && line.imageUrl && !line.isQr && !line.isBarcode) {
-      line.imageUrl = interpolate(line.imageUrl, card);
-      if (line.imageUrl && !line.imageUrl.startsWith('http') && !line.imageUrl.startsWith('data:')) continue; // Skip invalid
-    }
-    
-    if (line.isQr || line.isBarcode) {
-      await updateBarcodeQrImage(line, -1);
-    }
-    lines.push(line);
-  }
-  return lines;
+  return await generatePrintLines(card, baseLines, updateBarcodeQrImage);
 }
 
 async function openPrintPreview(id: string) {
@@ -795,7 +734,7 @@ async function openPrintPreview(id: string) {
   templateVariablesPanel.classList.add('hidden');
   importTemplateBtn.classList.add('hidden');
   exportTemplateBtn.classList.add('hidden');
-  printLines = await generatePrintLines(card);
+  printLines = await getPrintLinesForCard(card);
 
   renderPrintPreview();
   printPreviewModal.classList.remove('hidden');
@@ -1448,7 +1387,7 @@ editTemplateBtn.addEventListener('click', async () => {
   if (profile && profile.lines && profile.lines.length > 0) {
     printLines = JSON.parse(JSON.stringify(profile.lines));
   } else {
-    printLines = generateDefaultTemplateLines(sampleCard);
+    printLines = generateDefaultTemplateLines(sampleCard, shortLabel);
   }
   
   for (const line of printLines) {
@@ -1518,7 +1457,7 @@ printAllUnprintedBtn.addEventListener('click', async () => {
        const title = card[titleKey] || 'Untitled Item';
        
        try {
-         const lines = await generatePrintLines(card);
+         const lines = await getPrintLinesForCard(card);
          await sendLinesToPrinter(lines);
          addHistoryLog(card.id, title, 'success');
          printedIds.add(card.id);
