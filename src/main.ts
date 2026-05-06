@@ -801,6 +801,11 @@ function renderPrintPreview() {
 
     // Drag and Drop Logic
     control.addEventListener('dragstart', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'BUTTON') {
+        e.preventDefault();
+        return;
+      }
       dragStartIndex = index;
       if (e.dataTransfer) {
         e.dataTransfer.effectAllowed = 'move';
