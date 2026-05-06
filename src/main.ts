@@ -48,9 +48,9 @@ if (!schemaProfiles) {
 let templateAssignments: TemplateAssignments = JSON.parse(localStorage.getItem('templateAssignments') || '{}');
 
 // Template Profiles
-let activeTemplateId = 'default';
+let activeTemplateId = 'charity_receipt';
 let templateProfiles: Record<string, TemplateProfile> = {
-  'default': { id: 'default', name: 'Default Template', lines: [] }
+  'charity_receipt': { id: 'charity_receipt', name: 'Charity Receipt', lines: [] }
 };
 
 // History
@@ -196,7 +196,7 @@ function init() {
   } else {
     const oldBase = localStorage.getItem('base-print-template');
     if (oldBase) {
-      try { templateProfiles['default'].lines = JSON.parse(oldBase); } catch(e) {}
+      try { templateProfiles['charity_receipt'].lines = JSON.parse(oldBase); } catch(e) {}
     }
   }
   
@@ -847,8 +847,8 @@ modalPrintBtn.addEventListener('click', () => {
 });
 
 closeModal.addEventListener('click', closeEditModal);
-editModal.addEventListener('click', (e) => {
-  if (e.target === editModal) closeEditModal();
+editModal.addEventListener('click', () => {
+  // Prevent closing when clicking outside to avoid losing unsaved edits
 });
 
 // Printer Logic
@@ -933,7 +933,7 @@ const importTemplateFile = document.getElementById('import-template-file') as HT
 
 async function getPrintLinesForCard(card: CardData): Promise<PrintLine[]> {
   const cardTemplateId = templateAssignments[card.id] || activeTemplateId;
-  let baseLines = templateProfiles[cardTemplateId]?.lines || templateProfiles['default']?.lines || [];
+  let baseLines = templateProfiles[cardTemplateId]?.lines || templateProfiles['charity_receipt']?.lines || [];
   if (!baseLines.length) {
     baseLines = generateDefaultTemplateLines(card, shortLabel);
   }
@@ -1132,59 +1132,60 @@ function renderPrintPreview() {
         textSpan.style.textOverflow = 'ellipsis';
         textSpan.style.whiteSpace = 'nowrap';
         topRow.appendChild(textSpan);
+
+        const sliderWrap = document.createElement('div');
+        sliderWrap.style.display = 'flex';
+        sliderWrap.style.alignItems = 'center';
+        sliderWrap.style.gap = '5px';
+        sliderWrap.style.marginLeft = '10px';
+        
+        const leftLabel = document.createElement('span');
+        leftLabel.textContent = '🌘';
+        leftLabel.style.fontSize = '0.8rem';
+        
+        const rightLabel = document.createElement('span');
+        rightLabel.textContent = '☀️';
+        rightLabel.style.fontSize = '0.8rem';
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0.2';
+        slider.max = '3.0';
+        slider.step = '0.1';
+        slider.value = (line.gamma || 1.0).toString();
+        slider.addEventListener('input', () => {
+          printLines[index].gamma = parseFloat(slider.value);
+          const img = document.getElementById('preview-img-' + index);
+          if (img) {
+            img.style.filter = `grayscale(100%) contrast(150%) brightness(${slider.value})`;
+          }
+        });
+        slider.addEventListener('change', () => savePrintTemplate());
+        
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.innerHTML = '↺';
+        resetBtn.style.background = 'none';
+        resetBtn.style.border = 'none';
+        resetBtn.style.color = 'var(--text-color)';
+        resetBtn.style.cursor = 'pointer';
+        resetBtn.style.padding = '0 4px';
+        resetBtn.style.fontSize = '1rem';
+        resetBtn.title = 'Reset to default contrast';
+        resetBtn.addEventListener('click', () => {
+          slider.value = '1.0';
+          printLines[index].gamma = 1.0;
+          const img = document.getElementById('preview-img-' + index);
+          if (img) img.style.filter = `grayscale(100%) contrast(150%) brightness(1.0)`;
+          savePrintTemplate();
+        });
+        
+        sliderWrap.appendChild(leftLabel);
+        sliderWrap.appendChild(slider);
+        sliderWrap.appendChild(rightLabel);
+        sliderWrap.appendChild(resetBtn);
+        topRow.appendChild(sliderWrap);
       }
-
-      const sliderWrap = document.createElement('div');
-      sliderWrap.style.display = 'flex';
-      sliderWrap.style.alignItems = 'center';
-      sliderWrap.style.gap = '5px';
-      sliderWrap.style.marginLeft = '10px';
-      
-      const leftLabel = document.createElement('span');
-      leftLabel.textContent = '🌘';
-      leftLabel.style.fontSize = '0.8rem';
-      
-      const rightLabel = document.createElement('span');
-      rightLabel.textContent = '☀️';
-      rightLabel.style.fontSize = '0.8rem';
-
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = '0.2';
-      slider.max = '3.0';
-      slider.step = '0.1';
-      slider.value = (line.gamma || 1.0).toString();
-      slider.addEventListener('input', () => {
-        printLines[index].gamma = parseFloat(slider.value);
-        const img = document.getElementById('preview-img-' + index);
-        if (img) {
-          img.style.filter = `grayscale(100%) contrast(150%) brightness(${slider.value})`;
-        }
-      });
-      slider.addEventListener('change', () => savePrintTemplate());
-      
-      const resetBtn = document.createElement('button');
-      resetBtn.type = 'button';
-      resetBtn.innerHTML = '↺';
-      resetBtn.style.background = 'none';
-      resetBtn.style.border = 'none';
-      resetBtn.style.color = 'var(--text-color)';
-      resetBtn.style.cursor = 'pointer';
-      resetBtn.style.padding = '0 4px';
-      resetBtn.style.fontSize = '1rem';
-      resetBtn.title = 'Reset to default contrast';
-      resetBtn.addEventListener('click', () => {
-        slider.value = '1.0';
-        printLines[index].gamma = 1.0;
-        const img = document.getElementById('preview-img-' + index);
-        if (img) img.style.filter = `grayscale(100%) contrast(150%) brightness(1.0)`;
-        savePrintTemplate();
-      });
-      
-      sliderWrap.appendChild(leftLabel);
-      sliderWrap.appendChild(slider);
-      sliderWrap.appendChild(rightLabel);
-      sliderWrap.appendChild(resetBtn);
 
       const removeBtn = document.createElement('button');
       removeBtn.className = 'remove-line-btn';
@@ -1194,7 +1195,6 @@ function renderPrintPreview() {
         renderPrintPreview();
       });
 
-      topRow.appendChild(sliderWrap);
       topRow.appendChild(removeBtn);
     } else {
       const textInput = document.createElement('input');
@@ -1232,41 +1232,41 @@ function renderPrintPreview() {
 
     optionsRow.appendChild(makeBtn('Bold', line.bold || false, () => {
       printLines[index].bold = !printLines[index].bold;
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
 
     optionsRow.appendChild(makeBtn('Left', line.align === 'left', () => {
       printLines[index].align = 'left';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('Center', line.align === 'center', () => {
       printLines[index].align = 'center';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('Right', line.align === 'right', () => {
       printLines[index].align = 'right';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
 
     optionsRow.appendChild(makeBtn('XL', line.size === 'xl', () => {
       printLines[index].size = 'xl';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('Large', line.size === 'large', () => {
       printLines[index].size = 'large';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('Normal', line.size === 'normal', () => {
       printLines[index].size = 'normal';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('Small', line.size === 'small', () => {
       printLines[index].size = 'small';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('XS', line.size === 'xs', () => {
       printLines[index].size = 'xs';
-      updateReceiptPaper();
+      renderPrintPreview();
     }));
 
     control.appendChild(topRow);
@@ -1281,6 +1281,11 @@ function renderPrintPreview() {
 
 function savePrintTemplate() {
   if (isTemplateMode) {
+    if (templateProfiles[activeTemplateId]) {
+      templateProfiles[activeTemplateId].lines = JSON.parse(JSON.stringify(printLines));
+      localStorage.setItem('template-profiles', JSON.stringify(templateProfiles));
+    }
+    // Also save legacy fallback just in case
     localStorage.setItem('base-print-template', JSON.stringify(printLines));
   }
 }
@@ -1328,14 +1333,14 @@ addBarcodeBtn.addEventListener('click', async () => {
 });
 
 addSeparatorBtn.addEventListener('click', () => {
-  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
   renderPrintPreview();
 });
 
 closePrintPreview.addEventListener('click', closePrintPreviewModal);
 printPreviewCancel.addEventListener('click', closePrintPreviewModal);
-printPreviewModal.addEventListener('click', (e) => {
-  if (e.target === printPreviewModal) closePrintPreviewModal();
+printPreviewModal.addEventListener('click', () => {
+  // Prevent closing when clicking outside to avoid losing unsaved template changes
 });
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
@@ -1657,7 +1662,12 @@ editTemplateBtn.addEventListener('click', async () => {
   exportTemplateBtn.classList.remove('hidden');
   templateVariablesList.innerHTML = '';
   
-  for (const [key, value] of Object.entries(sampleCard)) {
+  const currentSchema = schemaProfiles[activeSchemaId];
+  const itemsToRender = currentSchema 
+    ? currentSchema.variables.map(v => ({ key: v, value: sampleCard[currentSchema.mapping[v]] || '' }))
+    : Object.entries(sampleCard).map(([key, value]) => ({ key, value }));
+
+  for (const { key, value } of itemsToRender) {
     const varTag = document.createElement('div');
     varTag.style.background = 'rgba(255,255,255,0.1)';
     varTag.style.padding = '4px 8px';
@@ -1831,11 +1841,11 @@ testPrinterBtn.addEventListener('click', async () => {
   try {
     const testLines: PrintLine[] = [
       { enabled: true, text: 'PRINTER DIAGNOSTICS', bold: true, align: 'center', size: 'large' },
-      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true },
+      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
       { enabled: true, text: `Time: ${new Date().toLocaleString()}`, bold: false, align: 'left', size: 'normal' },
       { enabled: true, text: 'Connection: Web Serial API', bold: false, align: 'left', size: 'normal' },
       { enabled: true, text: 'Status: OK', bold: false, align: 'left', size: 'normal' },
-      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true },
+      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
       { enabled: true, text: 'MUNBYN', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, gamma: 1.0 },
       { enabled: true, text: 'Web Receipt Printer Ready', bold: false, align: 'center', size: 'normal' }
     ];

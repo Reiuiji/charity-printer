@@ -30,29 +30,19 @@ export function interpolate(
   return result;
 }
 
-export function generateDefaultTemplateLines(card: CardData, shortLabelFn: (k: string) => string): PrintLine[] {
-  const titleKey = Object.keys(card).find(k => 
-    k.toLowerCase().includes('brief identifier') || 
-    k.toLowerCase().match(/name|title|item/)
-  ) || Object.keys(card)[0];
-  
+export function generateDefaultTemplateLines(_card: CardData, _shortLabelFn: (k: string) => string): PrintLine[] {
   const lines: PrintLine[] = [];
-  lines.push({ enabled: true, text: `{{${titleKey}}}`, bold: true, align: 'center', size: 'large' });
-  const donationKey = Object.keys(card).find(k => k.toLowerCase().includes('donation')) || 'id';
-  lines.push({ enabled: true, text: `Donation #{{${donationKey}}}`, bold: false, align: 'center', size: 'normal' });
-  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+  lines.push({ enabled: true, text: `{{Item Name}}`, bold: true, align: 'center', size: 'large' });
+  lines.push({ enabled: true, text: `Donation #{{Number}}`, bold: false, align: 'center', size: 'normal' });
+  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+  
+  lines.push({ enabled: true, text: `Donor: {{Donor}}`, bold: false, align: 'left', size: 'normal' });
+  lines.push({ enabled: true, text: `Price: {{Price}}`, bold: false, align: 'left', size: 'normal' });
+  lines.push({ enabled: true, text: `Description: {{Description}}`, bold: false, align: 'left', size: 'small' });
+  
+  lines.push({ enabled: true, text: ``, bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{Image}}`, gamma: 1.0 });
 
-  for (const key of Object.keys(card)) {
-    if (key === 'id' || key === titleKey || key === donationKey) continue;
-    const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
-    if (isPhotoColumn) {
-      lines.push({ enabled: true, text: `${shortLabelFn(key)}: {{${key}}}`, bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{${key}}}`, gamma: 1.0 });
-      continue;
-    }
-    lines.push({ enabled: true, text: `${shortLabelFn(key)}: {{${key}}}`, bold: false, align: 'left', size: 'normal' });
-  }
-
-  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
   return lines;
 }
 
