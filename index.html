@@ -75,6 +75,7 @@
               <div class="search-box">
                 <input type="text" id="search-input" placeholder="Search items..." />
               </div>
+              <button class="btn secondary-btn" id="edit-template-btn">⚙️ Edit Base Template</button>
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>
           </div>
@@ -134,6 +135,10 @@
             </div>
             <!-- Field Controls -->
             <div class="print-controls">
+              <div id="template-variables-panel" class="hidden" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <h3 style="margin-top: 0; font-size: 0.9rem; color: #fbbf24;">Available Variables (Click to copy)</h3>
+                <div id="template-variables-list" style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; max-height: 120px; overflow-y: auto;"></div>
+              </div>
               <h3>Receipt Lines</h3>
               <div id="print-lines-controls"></div>
               <div style="margin-top: 15px; margin-bottom: 15px; display: flex; gap: 8px;">

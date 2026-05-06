@@ -16,6 +16,7 @@ let autoSyncTimer: ReturnType<typeof setInterval> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let countdownSeconds = 0;
 let currentFilter: 'all' | 'unprinted' | 'printed' = 'all';
+let isTemplateMode = false;
 
 // DOM Elements
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
@@ -464,74 +465,88 @@ const addBarcodeBtn = document.getElementById('add-barcode-btn') as HTMLButtonEl
 const addSeparatorBtn = document.getElementById('add-separator-btn') as HTMLButtonElement;
 const printPreviewCancel = document.getElementById('print-preview-cancel') as HTMLButtonElement;
 const printPreviewSend = document.getElementById('print-preview-send') as HTMLButtonElement;
+const templateVariablesPanel = document.getElementById('template-variables-panel') as HTMLDivElement;
+const templateVariablesList = document.getElementById('template-variables-list') as HTMLDivElement;
 
-function generatePrintLines(card: any): PrintLine[] {
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function interpolate(templateString: string, card: any): string {
+  if (!templateString) return '';
+  let result = templateString;
+  for (const [key, value] of Object.entries(card)) {
+    const escapedKey = escapeRegExp(key);
+    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
+    result = result.replace(regex, (value as string) || '');
+  }
+  return result;
+}
+
+function generateDefaultTemplateLines(card: any): PrintLine[] {
   const titleKey = Object.keys(card).find(k => 
     k.toLowerCase().includes('brief identifier') || 
     k.toLowerCase().match(/name|title|item/)
   ) || Object.keys(card)[0];
-  const title = card[titleKey] || 'Receipt';
-  const donationNum = card['Donation #'] || card.id;
-
-  let template: Record<string, any> = {};
-  try {
-    const saved = localStorage.getItem('print-template');
-    if (saved) template = JSON.parse(saved);
-  } catch(e) {}
-
-  const applyTemplate = (id: string, defaultLine: Omit<PrintLine, 'id'>): PrintLine => {
-    const t = template[id];
-    if (t) {
-      return {
-        ...defaultLine,
-        enabled: t.enabled !== undefined ? t.enabled : defaultLine.enabled,
-        bold: t.bold !== undefined ? t.bold : defaultLine.bold,
-        align: t.align || defaultLine.align,
-        size: t.size || defaultLine.size,
-        gamma: t.gamma !== undefined ? t.gamma : (defaultLine.gamma || 1.0),
-        id
-      };
-    }
-    return { ...defaultLine, id };
-  };
-
+  
   const lines: PrintLine[] = [];
-  lines.push(applyTemplate('__title__', { enabled: true, text: title, bold: true, align: 'center', size: 'large' }));
-  lines.push(applyTemplate('__donation_num__', { enabled: true, text: `Donation #${donationNum}`, bold: false, align: 'center', size: 'normal' }));
-  lines.push(applyTemplate('__separator_top__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
+  lines.push({ enabled: true, text: `{{${titleKey}}}`, bold: true, align: 'center', size: 'large' });
+  const donationKey = Object.keys(card).find(k => k.toLowerCase().includes('donation')) || 'id';
+  lines.push({ enabled: true, text: `Donation #{{${donationKey}}}`, bold: false, align: 'center', size: 'normal' });
+  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
 
-  for (const [key, value] of Object.entries(card)) {
-    if (key === 'id' || key === titleKey || key === 'Donation #') continue;
-    if (!value || !value.trim()) continue;
-
+  for (const key of Object.keys(card)) {
+    if (key === 'id' || key === titleKey || key === donationKey) continue;
     const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
-    const looksLikeImageUrl = /^https?:\/\/.+/i.test(value.trim()) && (
-      /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(value) ||
-      value.includes('googleusercontent') ||
-      value.includes('drive.google') ||
-      value.includes('imgur')
-    );
-    
-    if (isPhotoColumn && looksLikeImageUrl) {
-      lines.push(applyTemplate(`__img_${key}__`, { enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: value.trim(), gamma: 1.0 }));
+    if (isPhotoColumn) {
+      lines.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{${key}}}`, gamma: 1.0 });
       continue;
     }
-
-    lines.push(applyTemplate(`__field_${key}__`, { enabled: true, text: `${shortLabel(key)}: ${value}`, bold: false, align: 'left', size: 'normal' }));
+    lines.push({ enabled: true, text: `${shortLabel(key)}: {{${key}}}`, bold: false, align: 'left', size: 'normal' });
   }
 
-  lines.push(applyTemplate('__separator_bottom__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
+  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
   return lines;
 }
 
-function openPrintPreview(id: string) {
+async function generatePrintLines(card: any): Promise<PrintLine[]> {
+  const saved = localStorage.getItem('base-print-template');
+  let baseLines: PrintLine[] = [];
+  if (saved) {
+    try { baseLines = JSON.parse(saved); } catch(e) {}
+  }
+  if (!baseLines.length) {
+    baseLines = generateDefaultTemplateLines(card);
+  }
+
+  const lines: PrintLine[] = [];
+  for (const tLine of baseLines) {
+    const line = { ...tLine };
+    if (!line.enabled) continue;
+    
+    line.text = interpolate(line.text, card);
+    if (line.isImage && line.imageUrl && !line.isQr && !line.isBarcode) {
+      line.imageUrl = interpolate(line.imageUrl, card);
+      if (line.imageUrl && !line.imageUrl.startsWith('http') && !line.imageUrl.startsWith('data:')) continue; // Skip invalid
+    }
+    
+    if (line.isQr || line.isBarcode) {
+      await updateBarcodeQrImage(line, -1);
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+async function openPrintPreview(id: string) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
 
   currentEditId = id;
-  printLines = generatePrintLines(card);
-
-
+  isTemplateMode = false;
+  printPreviewSend.textContent = '🖨️ Print';
+  templateVariablesPanel.classList.add('hidden');
+  printLines = await generatePrintLines(card);
 
   renderPrintPreview();
   printPreviewModal.classList.remove('hidden');
@@ -540,6 +555,7 @@ function openPrintPreview(id: string) {
 function closePrintPreviewModal() {
   printPreviewModal.classList.add('hidden');
   currentEditId = null;
+  isTemplateMode = false;
 }
 
 function renderPrintPreview() {
@@ -555,7 +571,13 @@ function renderPrintPreview() {
       if (line.align === 'right') imgWrap.classList.add('align-right');
       const img = document.createElement('img');
       img.id = 'preview-img-' + index;
-      img.src = line.imageUrl;
+      
+      let src = line.imageUrl;
+      if (isTemplateMode && cards.length > 0 && !line.isQr && !line.isBarcode) {
+        src = interpolate(src, cards[0]);
+      }
+      img.src = src;
+      
       img.style.maxWidth = '100%';
       img.style.display = 'inline-block';
       img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`; // Visual approximation of thermal print
@@ -574,7 +596,8 @@ function renderPrintPreview() {
     if (line.size === 'small') div.classList.add('size-small');
     if (line.size === 'xs') div.classList.add('size-xs');
     if (line.isSeparator) div.classList.add('separator');
-    div.textContent = line.text;
+    
+    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, cards[0]) : line.text;
     receiptPaper.appendChild(div);
   });
 
@@ -814,42 +837,30 @@ function renderPrintPreview() {
 }
 
 function savePrintTemplate() {
-  const template: Record<string, any> = {};
-  try {
-    const saved = localStorage.getItem('print-template');
-    if (saved) Object.assign(template, JSON.parse(saved));
-  } catch(e) {}
-
-  for (const line of printLines) {
-    if (line.id) {
-      template[line.id] = {
-        enabled: line.enabled,
-        bold: line.bold,
-        align: line.align,
-        size: line.size,
-        gamma: line.gamma
-      };
-    }
+  if (isTemplateMode) {
+    localStorage.setItem('base-print-template', JSON.stringify(printLines));
   }
-  localStorage.setItem('print-template', JSON.stringify(template));
 }
 
 async function updateBarcodeQrImage(line: PrintLine, index: number) {
+  const evalText = (isTemplateMode && cards.length > 0) ? interpolate(line.text || ' ', cards[0]) : (line.text || ' ');
   if (line.isQr) {
     try {
-      line.imageUrl = await QRCode.toDataURL(line.text || ' ', { width: 250, margin: 2, scale: 4 });
+      line.imageUrl = await QRCode.toDataURL(evalText, { width: 250, margin: 2, scale: 4 });
     } catch {}
   } else if (line.isBarcode) {
     try {
       const canvas = document.createElement('canvas');
-      bwipjs.toCanvas(canvas, { bcid: 'code128', text: line.text || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
+      bwipjs.toCanvas(canvas, { bcid: 'code128', text: evalText || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
       line.imageUrl = canvas.toDataURL('image/png');
     } catch {}
   }
   
-  const img = document.getElementById('preview-img-' + index) as HTMLImageElement;
-  if (img && line.imageUrl) {
-    img.src = line.imageUrl;
+  if (index >= 0) {
+    const img = document.getElementById('preview-img-' + index) as HTMLImageElement;
+    if (img && line.imageUrl) {
+      img.src = line.imageUrl;
+    }
   }
 }
 
@@ -1069,13 +1080,17 @@ async function sendLinesToPrinter(lines: PrintLine[]) {
 
 // Send to Printer from preview
 printPreviewSend.addEventListener('click', async () => {
+  if (isTemplateMode) {
+    savePrintTemplate();
+    closePrintPreviewModal();
+    return;
+  }
+
   try {
     await sendLinesToPrinter(printLines);
     closePrintPreviewModal();
 
-    // UI feedback on card and persistent printed tracking
     if (currentEditId) {
-      // Mark as printed persistently
       let printedIds: string[] = [];
       try {
         const saved = localStorage.getItem('printed-items');
@@ -1149,6 +1164,55 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
   });
 });
 
+const editTemplateBtn = document.getElementById('edit-template-btn') as HTMLButtonElement;
+editTemplateBtn.addEventListener('click', async () => {
+  if (cards.length === 0) {
+    alert('Fetch data first so we know the column structure!');
+    return;
+  }
+  isTemplateMode = true;
+  printPreviewSend.textContent = '💾 Save Base Template';
+  
+  const saved = localStorage.getItem('base-print-template');
+  if (saved) {
+    try { printLines = JSON.parse(saved); } catch(e) { printLines = generateDefaultTemplateLines(cards[0]); }
+  } else {
+    printLines = generateDefaultTemplateLines(cards[0]);
+  }
+  
+  for (const line of printLines) {
+    if (line.isQr || line.isBarcode) {
+      await updateBarcodeQrImage(line, -1);
+    }
+  }
+  
+  templateVariablesPanel.classList.remove('hidden');
+  templateVariablesList.innerHTML = '';
+  
+  const sampleCard = cards[0];
+  for (const [key, value] of Object.entries(sampleCard)) {
+    const varTag = document.createElement('div');
+    varTag.style.background = 'rgba(255,255,255,0.1)';
+    varTag.style.padding = '4px 8px';
+    varTag.style.borderRadius = '4px';
+    varTag.style.cursor = 'pointer';
+    varTag.title = 'Click to copy';
+    varTag.innerHTML = `<strong style="color:var(--primary-color)">{{${key}}}</strong> = <span style="opacity:0.8">${String(value).substring(0, 15) + (String(value).length > 15 ? '...' : '')}</span>`;
+    
+    varTag.addEventListener('click', () => {
+      navigator.clipboard.writeText(`{{${key}}}`);
+      const oldBg = varTag.style.background;
+      varTag.style.background = 'rgba(74, 222, 128, 0.3)';
+      setTimeout(() => varTag.style.background = oldBg, 300);
+    });
+    
+    templateVariablesList.appendChild(varTag);
+  }
+  
+  renderPrintPreview();
+  printPreviewModal.classList.remove('hidden');
+});
+
 const printAllUnprintedBtn = document.getElementById('print-all-unprinted-btn') as HTMLButtonElement;
 printAllUnprintedBtn.addEventListener('click', async () => {
   if (!port || !port.writable) {
@@ -1178,7 +1242,7 @@ printAllUnprintedBtn.addEventListener('click', async () => {
   
   try {
     for (const card of unprintedCards) {
-       const lines = generatePrintLines(card);
+       const lines = await generatePrintLines(card);
        await sendLinesToPrinter(lines);
        
        printedIds.add(card.id);
