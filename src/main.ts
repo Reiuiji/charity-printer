@@ -422,12 +422,16 @@ async function connectPrinter() {
 
 // Print Preview System
 interface PrintLine {
+  id?: string;
   enabled: boolean;
   text: string;
   bold: boolean;
   align: 'left' | 'center' | 'right';
-  size: 'normal' | 'large' | 'small';
+  size: 'xl' | 'large' | 'normal' | 'small' | 'xs';
   isSeparator?: boolean;
+  isImage?: boolean;
+  imageUrl?: string;
+  gamma?: number;
 }
 
 let printLines: PrintLine[] = [];
@@ -453,33 +457,65 @@ function openPrintPreview(id: string) {
   const title = card[titleKey] || 'Receipt';
   const donationNum = card['Donation #'] || card.id;
 
+  // Template logic
+  let template: Record<string, any> = {};
+  try {
+    const saved = localStorage.getItem('print-template');
+    if (saved) template = JSON.parse(saved);
+  } catch(e) {}
+
+  const applyTemplate = (id: string, defaultLine: Omit<PrintLine, 'id'>): PrintLine => {
+    const t = template[id];
+    if (t) {
+      return {
+        ...defaultLine,
+        enabled: t.enabled !== undefined ? t.enabled : defaultLine.enabled,
+        bold: t.bold !== undefined ? t.bold : defaultLine.bold,
+        align: t.align || defaultLine.align,
+        size: t.size || defaultLine.size,
+        gamma: t.gamma !== undefined ? t.gamma : (defaultLine.gamma || 1.0),
+        id
+      };
+    }
+    return { ...defaultLine, id };
+  };
+
   // Build default print lines from card data
   printLines = [];
 
-  // Title line (large, bold, centered)
-  printLines.push({ enabled: true, text: title, bold: true, align: 'center', size: 'large' });
+  // Title line
+  printLines.push(applyTemplate('__title__', { enabled: true, text: title, bold: true, align: 'center', size: 'large' }));
 
   // Donation number
-  printLines.push({ enabled: true, text: `Donation #${donationNum}`, bold: false, align: 'center', size: 'normal' });
+  printLines.push(applyTemplate('__donation_num__', { enabled: true, text: `Donation #${donationNum}`, bold: false, align: 'center', size: 'normal' }));
 
   // Separator
-  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+  printLines.push(applyTemplate('__separator_top__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
 
   // Card fields
   for (const [key, value] of Object.entries(card)) {
     if (key === 'id' || key === titleKey || key === 'Donation #') continue;
     if (!value || !value.trim()) continue;
 
-    // Skip photo URLs in print
+    // Skip photo URLs in print text, but add them as an image line
     const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
-    const isUrl = /^https?:\/\//i.test(value.trim());
-    if (isPhotoColumn && isUrl) continue;
+    const looksLikeImageUrl = /^https?:\/\/.+/i.test(value.trim()) && (
+      /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(value) ||
+      value.includes('googleusercontent') ||
+      value.includes('drive.google') ||
+      value.includes('imgur')
+    );
+    
+    if (isPhotoColumn && looksLikeImageUrl) {
+      printLines.push(applyTemplate(`__img_${key}__`, { enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: value.trim(), gamma: 1.0 }));
+      continue;
+    }
 
-    printLines.push({ enabled: true, text: `${shortLabel(key)}: ${value}`, bold: false, align: 'left', size: 'normal' });
+    printLines.push(applyTemplate(`__field_${key}__`, { enabled: true, text: `${shortLabel(key)}: ${value}`, bold: false, align: 'left', size: 'normal' }));
   }
 
   // Footer separator
-  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+  printLines.push(applyTemplate('__separator_bottom__', { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true }));
 
   renderPrintPreview();
   printPreviewModal.classList.remove('hidden');
@@ -491,17 +527,36 @@ function closePrintPreviewModal() {
 }
 
 function renderPrintPreview() {
+  savePrintTemplate();
   // Render receipt paper
   receiptPaper.innerHTML = '';
-  printLines.forEach(line => {
+  printLines.forEach((line, index) => {
     if (!line.enabled) return;
+    if (line.isImage && line.imageUrl) {
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'receipt-line';
+      if (line.align === 'center') imgWrap.classList.add('align-center');
+      if (line.align === 'right') imgWrap.classList.add('align-right');
+      const img = document.createElement('img');
+      img.id = 'preview-img-' + index;
+      img.src = line.imageUrl;
+      img.style.maxWidth = '100%';
+      img.style.display = 'inline-block';
+      img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`; // Visual approximation of thermal print
+      imgWrap.appendChild(img);
+      receiptPaper.appendChild(imgWrap);
+      return;
+    }
+
     const div = document.createElement('div');
     div.className = 'receipt-line';
     if (line.align === 'center') div.classList.add('align-center');
     if (line.align === 'right') div.classList.add('align-right');
     if (line.bold) div.classList.add('bold');
+    if (line.size === 'xl') div.classList.add('size-xl');
     if (line.size === 'large') div.classList.add('size-large');
     if (line.size === 'small') div.classList.add('size-small');
+    if (line.size === 'xs') div.classList.add('size-xs');
     if (line.isSeparator) div.classList.add('separator');
     div.textContent = line.text;
     receiptPaper.appendChild(div);
@@ -524,25 +579,105 @@ function renderPrintPreview() {
       renderPrintPreview();
     });
 
-    const textInput = document.createElement('input');
-    textInput.type = 'text';
-    textInput.value = line.text;
-    textInput.addEventListener('input', () => {
-      printLines[index].text = textInput.value;
-      renderPrintPreview();
-    });
+    if (line.isImage) {
+      const textSpan = document.createElement('span');
+      textSpan.textContent = `🖼️ Image: ${line.imageUrl?.split('/').pop() || 'Photo'}`;
+      textSpan.style.flex = '1';
+      textSpan.style.fontSize = '0.85rem';
+      textSpan.style.color = 'var(--primary-color)';
+      textSpan.style.overflow = 'hidden';
+      textSpan.style.textOverflow = 'ellipsis';
+      textSpan.style.whiteSpace = 'nowrap';
 
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-line-btn';
-    removeBtn.textContent = '✕';
-    removeBtn.addEventListener('click', () => {
-      printLines.splice(index, 1);
-      renderPrintPreview();
-    });
+      const sliderWrap = document.createElement('div');
+      sliderWrap.style.display = 'flex';
+      sliderWrap.style.alignItems = 'center';
+      sliderWrap.style.gap = '5px';
+      sliderWrap.style.marginLeft = '10px';
+      
+      const leftLabel = document.createElement('span');
+      leftLabel.textContent = '🌘';
+      leftLabel.style.fontSize = '0.8rem';
+      
+      const rightLabel = document.createElement('span');
+      rightLabel.textContent = '☀️';
+      rightLabel.style.fontSize = '0.8rem';
 
-    topRow.appendChild(checkbox);
-    topRow.appendChild(textInput);
-    topRow.appendChild(removeBtn);
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = '0.2';
+      slider.max = '3.0';
+      slider.step = '0.1';
+      slider.value = (line.gamma || 1.0).toString();
+      slider.addEventListener('input', () => {
+        printLines[index].gamma = parseFloat(slider.value);
+        const img = document.getElementById('preview-img-' + index);
+        if (img) {
+          img.style.filter = `grayscale(100%) contrast(150%) brightness(${slider.value})`;
+        }
+      });
+      slider.addEventListener('change', () => {
+        savePrintTemplate();
+      });
+      
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.innerHTML = '↺';
+      resetBtn.style.background = 'none';
+      resetBtn.style.border = 'none';
+      resetBtn.style.color = 'var(--text-color)';
+      resetBtn.style.cursor = 'pointer';
+      resetBtn.style.padding = '0 4px';
+      resetBtn.style.fontSize = '1rem';
+      resetBtn.title = 'Reset to default contrast';
+      resetBtn.addEventListener('click', () => {
+        slider.value = '1.0';
+        printLines[index].gamma = 1.0;
+        const img = document.getElementById('preview-img-' + index);
+        if (img) {
+          img.style.filter = `grayscale(100%) contrast(150%) brightness(1.0)`;
+        }
+        savePrintTemplate();
+      });
+      
+      sliderWrap.appendChild(leftLabel);
+      sliderWrap.appendChild(slider);
+      sliderWrap.appendChild(rightLabel);
+      sliderWrap.appendChild(resetBtn);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-line-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        printLines.splice(index, 1);
+        renderPrintPreview();
+      });
+
+      topRow.appendChild(checkbox);
+      topRow.appendChild(textSpan);
+      topRow.appendChild(sliderWrap);
+      topRow.appendChild(removeBtn);
+    } else {
+      const textInput = document.createElement('input');
+      textInput.type = 'text';
+      textInput.value = line.text;
+      textInput.addEventListener('input', () => {
+        printLines[index].text = textInput.value;
+        renderPrintPreview();
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-line-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        printLines.splice(index, 1);
+        renderPrintPreview();
+      });
+
+      topRow.appendChild(checkbox);
+      topRow.appendChild(textInput);
+      topRow.appendChild(removeBtn);
+    }
 
     // Options row
     const optionsRow = document.createElement('div');
@@ -575,16 +710,24 @@ function renderPrintPreview() {
       renderPrintPreview();
     }));
 
-    optionsRow.appendChild(makeBtn('Normal', line.size === 'normal', () => {
-      printLines[index].size = 'normal';
+    optionsRow.appendChild(makeBtn('XL', line.size === 'xl', () => {
+      printLines[index].size = 'xl';
       renderPrintPreview();
     }));
     optionsRow.appendChild(makeBtn('Large', line.size === 'large', () => {
       printLines[index].size = 'large';
       renderPrintPreview();
     }));
+    optionsRow.appendChild(makeBtn('Normal', line.size === 'normal', () => {
+      printLines[index].size = 'normal';
+      renderPrintPreview();
+    }));
     optionsRow.appendChild(makeBtn('Small', line.size === 'small', () => {
       printLines[index].size = 'small';
+      renderPrintPreview();
+    }));
+    optionsRow.appendChild(makeBtn('XS', line.size === 'xs', () => {
+      printLines[index].size = 'xs';
       renderPrintPreview();
     }));
 
@@ -592,6 +735,27 @@ function renderPrintPreview() {
     control.appendChild(optionsRow);
     printLinesControls.appendChild(control);
   });
+}
+
+function savePrintTemplate() {
+  const template: Record<string, any> = {};
+  try {
+    const saved = localStorage.getItem('print-template');
+    if (saved) Object.assign(template, JSON.parse(saved));
+  } catch(e) {}
+
+  for (const line of printLines) {
+    if (line.id) {
+      template[line.id] = {
+        enabled: line.enabled,
+        bold: line.bold,
+        align: line.align,
+        size: line.size,
+        gamma: line.gamma
+      };
+    }
+  }
+  localStorage.setItem('print-template', JSON.stringify(template));
 }
 
 addPrintLineBtn.addEventListener('click', () => {
@@ -604,6 +768,115 @@ printPreviewCancel.addEventListener('click', closePrintPreviewModal);
 printPreviewModal.addEventListener('click', (e) => {
   if (e.target === printPreviewModal) closePrintPreviewModal();
 });
+
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = url;
+  });
+}
+
+async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<Uint8Array | null> {
+  try {
+    let img: HTMLImageElement;
+    try {
+      img = await loadImage(url);
+    } catch {
+      // Fallback to proxy to bypass CORS
+      img = await loadImage(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // Max width 576 dots for 80mm
+    const maxWidth = 576;
+    let width = img.width;
+    let height = img.height;
+
+    if (width > maxWidth) {
+      height = Math.round(height * (maxWidth / width));
+      width = maxWidth;
+    }
+    
+    // width must be multiple of 8
+    width = Math.floor(width / 8) * 8;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const pixels = imageData.data;
+    
+    const gray = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+       const idx = i * 4;
+       const a = pixels[idx + 3];
+       if (a < 128) {
+         gray[i] = 255; // transparent = white
+       } else {
+         let luminance = (pixels[idx] * 0.299 + pixels[idx+1] * 0.587 + pixels[idx+2] * 0.114);
+         if (gamma !== 1.0) {
+           luminance = 255 * Math.pow(luminance / 255, 1 / gamma);
+         }
+         gray[i] = Math.min(255, Math.max(0, luminance));
+       }
+    }
+    
+    // Floyd-Steinberg dithering
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        const oldPixel = gray[i];
+        const newPixel = oldPixel < 128 ? 0 : 255;
+        gray[i] = newPixel;
+        const err = oldPixel - newPixel;
+        
+        if (x + 1 < width) gray[i + 1] += err * (7/16);
+        if (y + 1 < height) {
+          if (x - 1 >= 0) gray[i + width - 1] += err * (3/16);
+          gray[i + width] += err * (5/16);
+          if (x + 1 < width) gray[i + width + 1] += err * (1/16);
+        }
+      }
+    }
+
+    const xL = (width / 8) % 256;
+    const xH = Math.floor((width / 8) / 256);
+    const yL = height % 256;
+    const yH = Math.floor(height / 256);
+
+    const data = new Uint8Array(8 + (width / 8) * height);
+    data[0] = 0x1D; data[1] = 0x76; data[2] = 0x30; data[3] = 0x00;
+    data[4] = xL; data[5] = xH; data[6] = yL; data[7] = yH;
+
+    let idx = 8;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x += 8) {
+        let byte = 0;
+        for (let b = 0; b < 8; b++) {
+           if (gray[y * width + x + b] < 128) { // black
+             byte |= (1 << (7 - b));
+           }
+        }
+        data[idx++] = byte;
+      }
+    }
+    
+    return data;
+  } catch (err) {
+    console.error('Failed to convert image to raster', err);
+    return null;
+  }
+}
 
 // Send to Printer from preview
 printPreviewSend.addEventListener('click', async () => {
@@ -625,24 +898,51 @@ printPreviewSend.addEventListener('click', async () => {
     await writer.write(new Uint8Array([ESC, 0x40]));
 
     for (const line of enabledLines) {
-      // Alignment
-      const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
-      await writer.write(new Uint8Array([ESC, 0x61, alignByte]));
-
-      // Size
-      if (line.size === 'large') {
-        await writer.write(new Uint8Array([GS, 0x21, 0x11]));
-      } else if (line.size === 'small') {
-        await writer.write(new Uint8Array([GS, 0x21, 0x00])); // same as normal for most printers
+      if (line.isImage && line.imageUrl) {
+        const originalText = printPreviewSend.textContent;
+        printPreviewSend.textContent = 'Preparing Image...';
+        
+        const rasterData = await convertImageToRaster(line.imageUrl, line.gamma || 1.0);
+        if (rasterData) {
+          const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
+          await writer.write(new Uint8Array([ESC, 0x61, alignByte]));
+          await writer.write(rasterData);
+        } else {
+          alert('Could not download or convert image: ' + line.imageUrl);
+        }
+        
+        if (printPreviewSend.textContent === 'Preparing Image...') {
+          printPreviewSend.textContent = originalText;
+        }
       } else {
-        await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+        // Alignment
+        const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
+        await writer.write(new Uint8Array([ESC, 0x61, alignByte]));
+
+        // Size and Font
+        if (line.size === 'xl') {
+          await writer.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
+          await writer.write(new Uint8Array([GS, 0x21, 0x22]));  // Triple height/width
+        } else if (line.size === 'large') {
+          await writer.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
+          await writer.write(new Uint8Array([GS, 0x21, 0x11]));  // Double height/width
+        } else if (line.size === 'small') {
+          await writer.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
+          await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+        } else if (line.size === 'xs') {
+          await writer.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
+          await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+        } else {
+          await writer.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
+          await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+        }
+
+        // Bold
+        await writer.write(new Uint8Array([ESC, 0x45, line.bold ? 0x01 : 0x00]));
+
+        // Text
+        await writer.write(textEncoder.encode(line.text + '\n'));
       }
-
-      // Bold
-      await writer.write(new Uint8Array([ESC, 0x45, line.bold ? 0x01 : 0x00]));
-
-      // Text
-      await writer.write(textEncoder.encode(line.text + '\n'));
     }
 
     // Reset

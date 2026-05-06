@@ -633,8 +633,10 @@ select option {
 .receipt-line.align-center { text-align: center; }
 .receipt-line.align-right { text-align: right; }
 .receipt-line.bold { font-weight: 700; }
+.receipt-line.size-xl { font-size: 28px; line-height: 1.1; }
 .receipt-line.size-large { font-size: 20px; }
 .receipt-line.size-small { font-size: 11px; }
+.receipt-line.size-xs { font-size: 9px; line-height: 1.2; }
 .receipt-line.separator {
   text-align: center;
   letter-spacing: 2px;
