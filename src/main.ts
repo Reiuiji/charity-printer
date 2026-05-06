@@ -93,6 +93,7 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let countdownSeconds = 0;
 let currentFilter: 'all' | 'unprinted' | 'printed' = 'all';
 let isTemplateMode = false;
+let lastClickedCard: CardData | null = null;
 
 // DOM Elements
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
@@ -428,6 +429,7 @@ function renderCards(filterText = '') {
 function openPreviewModal(id: string) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
+  lastClickedCard = card;
 
   currentEditId = id;
 
@@ -505,6 +507,7 @@ previewPrintBtn.addEventListener('click', () => {
 function openEditModal(id: string) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
+  lastClickedCard = card;
 
   currentEditId = id;
   editFieldsContainer.innerHTML = '';
@@ -746,6 +749,7 @@ async function generatePrintLines(card: any): Promise<PrintLine[]> {
 async function openPrintPreview(id: string) {
   const card = cards.find(c => c.id === id);
   if (!card) return;
+  lastClickedCard = card;
 
   currentEditId = id;
   isTemplateMode = false;
@@ -781,7 +785,7 @@ function renderPrintPreview() {
       
       let src = line.imageUrl;
       if (isTemplateMode && cards.length > 0 && !line.isQr && !line.isBarcode) {
-        src = interpolate(src, cards[0]);
+        src = interpolate(src, lastClickedCard || cards[0]);
       }
       img.src = src;
       
@@ -804,7 +808,7 @@ function renderPrintPreview() {
     if (line.size === 'xs') div.classList.add('size-xs');
     if (line.isSeparator) div.classList.add('separator');
     
-    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, cards[0]) : line.text;
+    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, lastClickedCard || cards[0]) : line.text;
     receiptPaper.appendChild(div);
   });
 
@@ -1390,10 +1394,11 @@ editTemplateBtn.addEventListener('click', async () => {
   printPreviewSend.textContent = '💾 Save Base Template';
   
   const saved = localStorage.getItem('base-print-template');
+  const sampleCard = lastClickedCard || cards[0];
   if (saved) {
-    try { printLines = JSON.parse(saved); } catch(e) { printLines = generateDefaultTemplateLines(cards[0]); }
+    try { printLines = JSON.parse(saved); } catch(e) { printLines = generateDefaultTemplateLines(sampleCard); }
   } else {
-    printLines = generateDefaultTemplateLines(cards[0]);
+    printLines = generateDefaultTemplateLines(sampleCard);
   }
   
   for (const line of printLines) {
@@ -1407,7 +1412,6 @@ editTemplateBtn.addEventListener('click', async () => {
   exportTemplateBtn.classList.remove('hidden');
   templateVariablesList.innerHTML = '';
   
-  const sampleCard = cards[0];
   for (const [key, value] of Object.entries(sampleCard)) {
     const varTag = document.createElement('div');
     varTag.style.background = 'rgba(255,255,255,0.1)';
