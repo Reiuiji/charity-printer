@@ -228,13 +228,19 @@ body.light-theme .status.connected {
 }
 
 input[type="text"], input[type="number"] {
-  background: #ffffff !important;
+  background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 12px;
-  color: #000000 !important;
+  color: white;
   font-family: 'Inter', sans-serif;
   transition: border-color 0.2s;
+}
+
+body.light-theme input[type="text"], 
+body.light-theme input[type="number"] {
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 
 input[type="text"]:focus, input[type="number"]:focus {
@@ -309,11 +315,11 @@ hr {
 }
 
 select {
-  background: #ffffff !important;
+  background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 10px 12px;
-  color: #000000 !important;
+  color: white;
   font-family: 'Inter', sans-serif;
   font-size: 0.9rem;
   transition: border-color 0.2s;
@@ -324,12 +330,22 @@ select {
   cursor: pointer;
 }
 
+body.light-theme select {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
 select:focus {
   outline: none;
   border-color: var(--primary-color);
 }
 
 select option {
+  background: #1e293b;
+  color: white;
+}
+
+body.light-theme select option {
   background: #ffffff;
   color: #000000;
 }
