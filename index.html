@@ -23,19 +23,19 @@
       <main class="dashboard" style="grid-template-columns: 1fr;">
 
         <section class="content">
-          <div class="controls-bar" style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <div style="display: flex; flex: 1; align-items: center; gap: 15px;">
-              <h2>Items</h2>
+          <div class="controls-bar" style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+              <h2 style="margin: 0;">Items</h2>
+              <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search items..." style="padding: 8px; width: 250px;" />
+              </div>
               <div class="filter-tabs" id="filter-tabs">
                 <button class="filter-tab active" data-filter="all">All</button>
                 <button class="filter-tab" data-filter="unprinted">Unprinted</button>
                 <button class="filter-tab" data-filter="printed">Printed</button>
               </div>
             </div>
-            <div style="display: flex; gap: 10px;">
-              <div class="search-box">
-                <input type="text" id="search-input" placeholder="Search items..." />
-              </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>
           </div>
