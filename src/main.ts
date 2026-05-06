@@ -1302,7 +1302,24 @@ async function updateBarcodeQrImage(line: PrintLine, index: number) {
       const canvas = document.createElement('canvas');
       bwipjs.toCanvas(canvas, { bcid: line.barcodeFormat || 'code128', text: evalText || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
       line.imageUrl = canvas.toDataURL('image/png');
-    } catch {}
+    } catch (e: any) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 300;
+      canvas.height = 60;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, 300, 60);
+        ctx.fillStyle = 'red';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Barcode Error', 150, 25);
+        ctx.font = '12px sans-serif';
+        const msg = e.message ? (e.message.split(':').pop()?.trim() || e.message) : 'Invalid format';
+        ctx.fillText(msg, 150, 45);
+      }
+      line.imageUrl = canvas.toDataURL('image/png');
+    }
   }
   
   if (index >= 0) {
