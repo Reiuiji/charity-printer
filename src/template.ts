@@ -31,7 +31,7 @@ export function generateDefaultTemplateLines(card: CardData, shortLabelFn: (k: s
     if (key === 'id' || key === titleKey || key === donationKey) continue;
     const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
     if (isPhotoColumn) {
-      lines.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{${key}}}`, gamma: 1.0 });
+      lines.push({ enabled: true, text: `${shortLabelFn(key)}: {{${key}}}`, bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{${key}}}`, gamma: 1.0 });
       continue;
     }
     lines.push({ enabled: true, text: `${shortLabelFn(key)}: {{${key}}}`, bold: false, align: 'left', size: 'normal' });
@@ -54,7 +54,11 @@ export async function generatePrintLines(
     line.text = interpolate(line.text, card);
     if (line.isImage && line.imageUrl && !line.isQr && !line.isBarcode) {
       line.imageUrl = interpolate(line.imageUrl, card);
-      if (line.imageUrl && !line.imageUrl.startsWith('http') && !line.imageUrl.startsWith('data:')) continue; // Skip invalid
+      if (line.imageUrl && !line.imageUrl.startsWith('http') && !line.imageUrl.startsWith('data:')) {
+        // Data is not a valid URL (e.g. text like 'None' or 'Yes'). Fallback to text mode.
+        line.isImage = false;
+        if (!line.text) line.text = line.imageUrl; // Just in case
+      }
     }
     
     if (line.isQr || line.isBarcode) {
