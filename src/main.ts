@@ -1390,20 +1390,22 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
     }
     
     // width must be multiple of 8
-    width = Math.floor(width / 8) * 8;
+    const paddedWidth = Math.ceil(width / 8) * 8;
 
-    canvas.width = width;
+    canvas.width = paddedWidth;
     canvas.height = height;
 
     ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(img, 0, 0, width, height);
+    ctx.fillRect(0, 0, paddedWidth, height);
+    
+    const offsetX = Math.floor((paddedWidth - width) / 2);
+    ctx.drawImage(img, offsetX, 0, width, height);
 
-    const imageData = ctx.getImageData(0, 0, width, height);
+    const imageData = ctx.getImageData(0, 0, paddedWidth, height);
     const pixels = imageData.data;
     
-    const gray = new Float32Array(width * height);
-    for (let i = 0; i < width * height; i++) {
+    const gray = new Float32Array(paddedWidth * height);
+    for (let i = 0; i < paddedWidth * height; i++) {
        const idx = i * 4;
        const a = pixels[idx + 3];
        if (a < 128) {
@@ -1419,37 +1421,37 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
     
     // Floyd-Steinberg dithering
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = y * width + x;
+      for (let x = 0; x < paddedWidth; x++) {
+        const i = y * paddedWidth + x;
         const oldPixel = gray[i];
         const newPixel = oldPixel < 128 ? 0 : 255;
         gray[i] = newPixel;
         const err = oldPixel - newPixel;
         
-        if (x + 1 < width) gray[i + 1] += err * (7/16);
+        if (x + 1 < paddedWidth) gray[i + 1] += err * (7/16);
         if (y + 1 < height) {
-          if (x - 1 >= 0) gray[i + width - 1] += err * (3/16);
-          gray[i + width] += err * (5/16);
-          if (x + 1 < width) gray[i + width + 1] += err * (1/16);
+          if (x - 1 >= 0) gray[i + paddedWidth - 1] += err * (3/16);
+          gray[i + paddedWidth] += err * (5/16);
+          if (x + 1 < paddedWidth) gray[i + paddedWidth + 1] += err * (1/16);
         }
       }
     }
 
-    const xL = (width / 8) % 256;
-    const xH = Math.floor((width / 8) / 256);
+    const xL = (paddedWidth / 8) % 256;
+    const xH = Math.floor((paddedWidth / 8) / 256);
     const yL = height % 256;
     const yH = Math.floor(height / 256);
 
-    const data = new Uint8Array(8 + (width / 8) * height);
+    const data = new Uint8Array(8 + (paddedWidth / 8) * height);
     data[0] = 0x1D; data[1] = 0x76; data[2] = 0x30; data[3] = 0x00;
     data[4] = xL; data[5] = xH; data[6] = yL; data[7] = yH;
 
     let idx = 8;
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x += 8) {
+      for (let x = 0; x < paddedWidth; x += 8) {
         let byte = 0;
         for (let b = 0; b < 8; b++) {
-           if (gray[y * width + x + b] < 128) { // black
+           if (gray[y * paddedWidth + x + b] < 128) { // black
              byte |= (1 << (7 - b));
            }
         }
@@ -1470,7 +1472,7 @@ async function sendLinesToPrinter(lines: PrintLine[]) {
   const feedLines = parseInt(feedLinesInput.value, 10) || 4;
 
   for (const line of lines) {
-    if (line.enabled && line.isImage && line.imageUrl && !line.isQr && !line.isBarcode && !line.rasterData) {
+    if (line.enabled && line.isImage && line.imageUrl && !line.rasterData) {
       const originalText = printPreviewSend.textContent;
       printPreviewSend.textContent = 'Preparing Image...';
       const rasterData = await convertImageToRaster(line.imageUrl, line.gamma || 1.0);
