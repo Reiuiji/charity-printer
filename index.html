@@ -144,6 +144,21 @@
 
           <hr>
 
+          <!-- Schema Mapper -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">🧩 Data Schema Mapper</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
+              Map your raw CSV columns to standard internal variables so your templates never break.
+            </p>
+            <div id="schema-mapper-container" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Javascript will inject schema mapper UI here -->
+              <em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure mapping.</em>
+            </div>
+            <button id="add-schema-var-btn" class="btn secondary-btn" style="margin-top: 10px; width: 100%;">➕ Add Internal Variable</button>
+          </div>
+
+          <hr>
+
           <!-- Automation -->
           <div class="settings-section">
             <h3 style="margin-bottom: 10px;">⚙️ Automation</h3>

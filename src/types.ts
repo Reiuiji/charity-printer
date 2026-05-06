@@ -26,6 +26,10 @@ export interface TemplateProfile {
   lines: PrintLine[];
 }
 
+export type SchemaMapping = Record<string, string>; // e.g. { "Item Name": "Brief Identifier" }
+
+export type TemplateAssignments = Record<string, string>; // e.g. { "card-id-123": "template-id-456" }
+
 export interface PrintHistoryLog {
   timestamp: number;
   id: string;

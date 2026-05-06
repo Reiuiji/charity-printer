@@ -4,10 +4,25 @@ export function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
-export function interpolate(templateString: string, card: CardData): string {
+export function interpolate(
+  templateString: string, 
+  card: CardData, 
+  schemaMapping?: Record<string, string>, 
+  abstractVariables?: string[]
+): string {
   if (!templateString) return '';
   let result = templateString;
-  for (const [key, value] of Object.entries(card)) {
+  
+  const data = { ...card };
+  if (schemaMapping && abstractVariables) {
+    for (const av of abstractVariables) {
+      if (schemaMapping[av] && card[schemaMapping[av]] !== undefined) {
+        data[av] = card[schemaMapping[av]];
+      }
+    }
+  }
+
+  for (const [key, value] of Object.entries(data)) {
     const escapedKey = escapeRegExp(key);
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
     result = result.replace(regex, (value as string) || '');
@@ -44,16 +59,18 @@ export function generateDefaultTemplateLines(card: CardData, shortLabelFn: (k: s
 export async function generatePrintLines(
   card: CardData, 
   baseLines: PrintLine[],
-  updateBarcodeQrImageFn: (line: PrintLine, index: number) => Promise<void>
+  updateBarcodeQrImageFn: (line: PrintLine, index: number) => Promise<void>,
+  schemaMapping?: Record<string, string>,
+  abstractVariables?: string[]
 ): Promise<PrintLine[]> {
   const lines: PrintLine[] = [];
   for (const tLine of baseLines) {
     const line = { ...tLine };
     if (!line.enabled) continue;
     
-    line.text = interpolate(line.text, card);
+    line.text = interpolate(line.text, card, schemaMapping, abstractVariables);
     if (line.isImage && line.imageUrl && !line.isQr && !line.isBarcode) {
-      line.imageUrl = interpolate(line.imageUrl, card);
+      line.imageUrl = interpolate(line.imageUrl, card, schemaMapping, abstractVariables);
       if (line.imageUrl && !line.imageUrl.startsWith('http') && !line.imageUrl.startsWith('data:')) {
         // Data is not a valid URL (e.g. text like 'None' or 'Yes'). Fallback to text mode.
         line.isImage = false;

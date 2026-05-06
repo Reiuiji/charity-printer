@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import * as QRCode from 'qrcode';
 import * as bwipjs from 'bwip-js';
 
-import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog } from './types';
+import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog, TemplateAssignments } from './types';
 import { generateDefaultTemplateLines, generatePrintLines, interpolate } from './template';
 import { sendLinesToPrinter as _sendLinesToPrinter } from './printer';
 import type { PrinterTransport } from './transport';
@@ -23,6 +23,11 @@ let countdownSeconds = 0;
 let currentFilter: 'all' | 'unprinted' | 'printed' = 'all';
 let isTemplateMode = false;
 let lastClickedCard: CardData | null = null;
+
+// Schema Mapping
+let schemaMapping: Record<string, string> = JSON.parse(localStorage.getItem('schemaMapping') || '{}');
+let abstractVariables: string[] = JSON.parse(localStorage.getItem('abstractVariables') || '["Item Name", "Item ID", "Donor", "Price", "Image"]');
+let templateAssignments: TemplateAssignments = JSON.parse(localStorage.getItem('templateAssignments') || '{}');
 
 // Template Profiles
 let activeTemplateId = 'default';
@@ -62,6 +67,10 @@ const autoPrintToggle = document.getElementById('auto-print-toggle') as HTMLInpu
 const syncIntervalSelect = document.getElementById('sync-interval') as HTMLSelectElement;
 const countdownDisplay = document.getElementById('countdown-display') as HTMLDivElement;
 const countdownValue = document.getElementById('countdown-value') as HTMLSpanElement;
+
+// Schema Mapper
+const schemaMapperContainer = document.getElementById('schema-mapper-container') as HTMLDivElement;
+const addSchemaVarBtn = document.getElementById('add-schema-var-btn') as HTMLButtonElement;
 
 const previewModal = document.getElementById('preview-modal') as HTMLDivElement;
 const closePreview = document.getElementById('close-preview') as HTMLSpanElement;
@@ -135,6 +144,8 @@ function init() {
     cards = JSON.parse(savedCards);
     renderCards();
   }
+  
+  renderSchemaMapper();
 
   const syncTime = localStorage.getItem('last-sync');
   if (syncTime) {
@@ -268,6 +279,7 @@ async function fetchData() {
 
         saveCards();
         renderCards();
+        renderSchemaMapper();
         
         const now = new Date().toISOString();
         localStorage.setItem('last-sync', now);
@@ -292,6 +304,113 @@ async function fetchData() {
 function saveCards() {
   localStorage.setItem('cards-data', JSON.stringify(cards));
 }
+
+function saveSchemaMapping() {
+  localStorage.setItem('schemaMapping', JSON.stringify(schemaMapping));
+  localStorage.setItem('abstractVariables', JSON.stringify(abstractVariables));
+}
+
+function renderSchemaMapper() {
+  if (!schemaMapperContainer) return;
+  schemaMapperContainer.innerHTML = '';
+  
+  if (cards.length === 0) {
+    schemaMapperContainer.innerHTML = '<em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure mapping.</em>';
+    return;
+  }
+  
+  const csvHeaders = Object.keys(cards[0]);
+  
+  abstractVariables.forEach((variable, index) => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '10px';
+    row.style.alignItems = 'center';
+    
+    const varInput = document.createElement('input');
+    varInput.type = 'text';
+    varInput.value = variable;
+    varInput.className = 'form-input';
+    varInput.style.flex = '1';
+    varInput.style.padding = '6px';
+    varInput.style.borderRadius = '4px';
+    varInput.style.background = 'rgba(0,0,0,0.2)';
+    varInput.style.color = 'var(--text-main)';
+    varInput.style.border = '1px solid var(--glass-border)';
+    varInput.placeholder = 'Internal Var';
+    
+    varInput.addEventListener('change', () => {
+       const oldVar = abstractVariables[index];
+       const newVar = varInput.value.trim() || oldVar;
+       abstractVariables[index] = newVar;
+       if (oldVar !== newVar) {
+         schemaMapping[newVar] = schemaMapping[oldVar];
+         delete schemaMapping[oldVar];
+         saveSchemaMapping();
+       }
+    });
+
+    const arrow = document.createElement('span');
+    arrow.textContent = '←';
+    arrow.style.color = 'var(--text-muted)';
+    arrow.style.fontSize = '1.2rem';
+    
+    const headerSelect = document.createElement('select');
+    headerSelect.className = 'form-input';
+    headerSelect.style.flex = '1';
+    headerSelect.style.padding = '6px';
+    headerSelect.style.borderRadius = '4px';
+    headerSelect.style.background = 'rgba(0,0,0,0.2)';
+    headerSelect.style.color = 'var(--text-main)';
+    headerSelect.style.border = '1px solid var(--glass-border)';
+    
+    const unmappedOpt = document.createElement('option');
+    unmappedOpt.value = '';
+    unmappedOpt.textContent = '-- Unmapped --';
+    unmappedOpt.style.color = '#000';
+    headerSelect.appendChild(unmappedOpt);
+    
+    csvHeaders.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      opt.style.color = '#000';
+      headerSelect.appendChild(opt);
+    });
+    
+    headerSelect.value = schemaMapping[variable] || '';
+    
+    headerSelect.addEventListener('change', () => {
+      schemaMapping[abstractVariables[index]] = headerSelect.value;
+      saveSchemaMapping();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.className = 'remove-line-btn';
+    removeBtn.style.padding = '4px 8px';
+    removeBtn.addEventListener('click', () => {
+       delete schemaMapping[abstractVariables[index]];
+       abstractVariables.splice(index, 1);
+       saveSchemaMapping();
+       renderSchemaMapper();
+    });
+    
+    row.appendChild(varInput);
+    row.appendChild(arrow);
+    row.appendChild(headerSelect);
+    row.appendChild(removeBtn);
+    
+    schemaMapperContainer.appendChild(row);
+  });
+}
+
+addSchemaVarBtn?.addEventListener('click', () => {
+  const newVar = `Var ${abstractVariables.length + 1}`;
+  abstractVariables.push(newVar);
+  saveSchemaMapping();
+  renderSchemaMapper();
+});
 
 async function autoPrintNewItems() {
   let printedIds: Set<string> = new Set();
@@ -426,6 +545,11 @@ function renderCards(filterText = '') {
       `;
       fieldCount++;
     }
+    const currentTemplateId = templateAssignments[card.id] || activeTemplateId;
+    let templateOptionsHtml = '';
+    for (const profile of Object.values(templateProfiles)) {
+      templateOptionsHtml += `<option value="${profile.id}" ${currentTemplateId === profile.id ? 'selected' : ''}>${profile.name}</option>`;
+    }
 
     cardEl.innerHTML = `
       <div class="card-header">
@@ -435,15 +559,32 @@ function renderCards(filterText = '') {
       <div class="card-content">
         ${fieldsHtml}
       </div>
-      <div class="card-actions">
-        <button class="btn secondary-btn edit-btn" data-id="${card.id}">✏️ Edit</button>
-        <button class="btn print-btn print-item-btn ${printedIds.has(card.id) ? 'printed' : ''}" data-id="${card.id}">
-          ${printedIds.has(card.id) ? '✅ Printed' : '🖨️ Print'}
-        </button>
+      <div class="card-actions" style="flex-wrap: wrap; gap: 8px;">
+        <select class="form-input template-assign-select" data-id="${card.id}" style="padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); flex: 1; min-width: 100%; font-size: 0.8rem;" title="Select Template">
+          ${templateOptionsHtml}
+        </select>
+        <div style="display: flex; gap: 10px; width: 100%;">
+          <button class="btn secondary-btn edit-btn" style="flex: 1" data-id="${card.id}">✏️ Edit</button>
+          <button class="btn print-btn print-item-btn ${printedIds.has(card.id) ? 'printed' : ''}" style="flex: 2" data-id="${card.id}">
+            ${printedIds.has(card.id) ? '✅ Printed' : '🖨️ Print'}
+          </button>
+        </div>
       </div>
     `;
 
     cardsContainer.appendChild(cardEl);
+  });
+
+  // Attach select listeners
+  document.querySelectorAll('.template-assign-select').forEach(select => {
+    select.addEventListener('change', (e) => {
+      const target = e.target as HTMLSelectElement;
+      const id = target.dataset.id;
+      if (id) {
+        templateAssignments[id] = target.value;
+        localStorage.setItem('templateAssignments', JSON.stringify(templateAssignments));
+      }
+    });
   });
 
   // Click card body to open preview
@@ -716,11 +857,12 @@ const exportTemplateBtn = document.getElementById('export-template-btn') as HTML
 const importTemplateFile = document.getElementById('import-template-file') as HTMLInputElement;
 
 async function getPrintLinesForCard(card: CardData): Promise<PrintLine[]> {
-  let baseLines = templateProfiles[activeTemplateId]?.lines || [];
+  const cardTemplateId = templateAssignments[card.id] || activeTemplateId;
+  let baseLines = templateProfiles[cardTemplateId]?.lines || templateProfiles['default']?.lines || [];
   if (!baseLines.length) {
     baseLines = generateDefaultTemplateLines(card, shortLabel);
   }
-  return await generatePrintLines(card, baseLines, updateBarcodeQrImage);
+  return await generatePrintLines(card, baseLines, updateBarcodeQrImage, schemaMapping, abstractVariables);
 }
 
 async function openPrintPreview(id: string) {
@@ -762,7 +904,7 @@ function updateReceiptPaper() {
       
       let src = line.imageUrl;
       if (isTemplateMode && cards.length > 0 && !line.isQr && !line.isBarcode) {
-        src = interpolate(src, lastClickedCard || cards[0]);
+        src = interpolate(src, lastClickedCard || cards[0], schemaMapping, abstractVariables);
       }
       img.src = src;
       
@@ -785,7 +927,7 @@ function updateReceiptPaper() {
     if (line.size === 'xs') div.classList.add('size-xs');
     if (line.isSeparator) div.classList.add('separator');
     
-    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, lastClickedCard || cards[0]) : line.text;
+    div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, lastClickedCard || cards[0], schemaMapping, abstractVariables) : line.text;
     receiptPaper.appendChild(div);
   });
 }
@@ -1066,7 +1208,7 @@ function savePrintTemplate() {
 }
 
 async function updateBarcodeQrImage(line: PrintLine, index: number) {
-  const evalText = (isTemplateMode && cards.length > 0) ? interpolate(line.text || ' ', cards[0]) : (line.text || ' ');
+  const evalText = (isTemplateMode && cards.length > 0) ? interpolate(line.text || ' ', cards[0], schemaMapping, abstractVariables) : (line.text || ' ');
   if (line.isQr) {
     try {
       line.imageUrl = await QRCode.toDataURL(evalText, { width: 250, margin: 2, scale: 4 });
