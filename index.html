@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receipt Printer Dashboard</title>
+    <link rel="stylesheet" href="/src/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app">
+      <header class="glass-header">
+        <h1>Receipt Printer Dashboard</h1>
+        <div class="header-controls">
+          <button id="connect-printer-btn" class="btn primary-btn">
+            <span class="icon">🖨️</span> Connect Printer
+          </button>
+          <div id="printer-status" class="status disconnected">Disconnected</div>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <aside class="sidebar glass-panel">
+          <h2>Data Source</h2>
+          <div class="input-group">
+            <label for="csv-url">Google Sheets Published CSV URL</label>
+            <input type="text" id="csv-url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv" />
+          </div>
+          <button id="fetch-data-btn" class="btn secondary-btn">Fetch Data</button>
+          
+          <hr />
+
+          <div class="auto-sync-section">
+            <div class="auto-sync-header">
+              <label for="auto-sync-toggle">Auto Sync</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="auto-sync-toggle" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="input-group">
+              <label for="sync-interval">Interval</label>
+              <select id="sync-interval">
+                <option value="1">1 minute</option>
+                <option value="2">2 minutes</option>
+                <option value="5" selected>5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+              </select>
+            </div>
+            <div id="countdown-display" class="countdown hidden">
+              Next sync in <span id="countdown-value">--:--</span>
+            </div>
+          </div>
+
+          <hr />
+          
+          <div class="sync-info">
+            <small>Last synced: <span id="last-sync-time">Never</span></small>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="controls-bar">
+            <h2>Items</h2>
+            <div class="search-box">
+              <input type="text" id="search-input" placeholder="Search items..." />
+            </div>
+          </div>
+
+          <div id="cards-container" class="cards-grid">
+            <!-- Cards will be injected here via JS -->
+            <div class="empty-state">
+              <p>No items loaded. Please configure your CSV URL and fetch data.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Preview Modal -->
+      <div id="preview-modal" class="modal hidden">
+        <div class="modal-content modal-preview glass-panel">
+          <span class="close-btn" id="close-preview">&times;</span>
+          <div id="preview-body">
+            <!-- Dynamic preview content -->
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn secondary-btn" id="preview-edit-btn">✏️ Edit</button>
+            <button type="button" class="btn print-btn" id="preview-print-btn">🖨️ Print</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Modal -->
+      <div id="edit-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+          <span class="close-btn" id="close-modal">&times;</span>
+          <h2>Edit Item</h2>
+          <form id="edit-form">
+            <div id="edit-fields-container">
+              <!-- Dynamic fields -->
+            </div>
+            <div class="modal-actions">
+              <button type="submit" class="btn primary-btn">Save Changes</button>
+              <button type="button" class="btn print-btn" id="modal-print-btn">Print Now</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Print Preview Modal -->
+      <div id="print-preview-modal" class="modal hidden">
+        <div class="modal-content modal-print-preview glass-panel">
+          <span class="close-btn" id="close-print-preview">&times;</span>
+          <h2>Print Preview</h2>
+          <div class="print-preview-layout">
+            <!-- Receipt Paper Simulation -->
+            <div class="receipt-paper-wrap">
+              <div class="receipt-paper" id="receipt-paper">
+                <!-- Dynamic receipt lines rendered here -->
+              </div>
+            </div>
+            <!-- Field Controls -->
+            <div class="print-controls">
+              <h3>Receipt Lines</h3>
+              <div id="print-lines-controls">
+                <!-- Dynamic line controls -->
+              </div>
+              <button type="button" class="btn secondary-btn" id="add-print-line-btn">+ Add Line</button>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn secondary-btn" id="print-preview-cancel">Cancel</button>
+            <button type="button" class="btn print-btn" id="print-preview-send">🖨️ Send to Printer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
