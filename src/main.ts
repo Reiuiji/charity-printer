@@ -1100,11 +1100,6 @@ function renderPrintPreview() {
         if (line.isBarcode) {
           const formatSelect = document.createElement('select');
           formatSelect.style.marginLeft = '10px';
-          formatSelect.style.padding = '4px';
-          formatSelect.style.borderRadius = '4px';
-          formatSelect.style.background = 'rgba(0,0,0,0.2)';
-          formatSelect.style.color = 'var(--text-main)';
-          formatSelect.style.border = '1px solid var(--glass-border)';
           
           const formats = ['code128', 'code39', 'ean13', 'upca'];
           formats.forEach(f => {

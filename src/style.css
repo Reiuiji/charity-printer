@@ -14,10 +14,10 @@
 
 body.light-theme {
   --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  --text-main: #1e293b;
-  --text-muted: #64748b;
+  --text-main: #020617; /* Even darker, nearly black */
+  --text-muted: #334155; /* Darker slate for muted text */
   --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-border: rgba(0, 0, 0, 0.15);
   --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
   --primary-color: #4f46e5;
   --secondary-color: #059669;
@@ -93,10 +93,22 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+body.light-theme .status.disconnected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #b91c1c; /* Darker red */
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 .status.connected {
   background: rgba(16, 185, 129, 0.2);
   color: #6ee7b7;
   border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+body.light-theme .status.connected {
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857; /* Darker green */
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 /* Buttons */
@@ -126,12 +138,12 @@ body {
 
 .secondary-btn {
   background: var(--glass-bg);
-  color: white;
+  color: var(--text-main);
   border: 1px solid var(--glass-border);
 }
 
 .secondary-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--glass-border);
 }
 
 .print-btn {
@@ -215,17 +227,17 @@ body {
   color: white;
 }
 
-input[type="text"] {
-  background: rgba(0, 0, 0, 0.2);
+input[type="text"], input[type="number"] {
+  background: #ffffff !important;
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 12px;
-  color: white;
+  color: #000000 !important;
   font-family: 'Inter', sans-serif;
   transition: border-color 0.2s;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus, input[type="number"]:focus {
   outline: none;
   border-color: var(--primary-color);
 }
@@ -297,11 +309,11 @@ hr {
 }
 
 select {
-  background: rgba(0, 0, 0, 0.2);
+  background: #ffffff !important;
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 10px 12px;
-  color: white;
+  color: #000000 !important;
   font-family: 'Inter', sans-serif;
   font-size: 0.9rem;
   transition: border-color 0.2s;
@@ -318,8 +330,8 @@ select:focus {
 }
 
 select option {
-  background: #1e293b;
-  color: white;
+  background: #ffffff;
+  color: #000000;
 }
 
 .countdown {
@@ -406,7 +418,7 @@ select option {
 
 .card-content {
   font-size: 0.85rem;
-  color: #cbd5e1;
+  color: var(--text-main);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -417,7 +429,7 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--glass-border);
   padding-bottom: 6px;
 }
 
@@ -436,7 +448,7 @@ select option {
   color: var(--text-muted);
   font-style: italic;
   font-size: 0.8rem;
-  border: none;
+  border-bottom: none;
 }
 
 .card-actions {
