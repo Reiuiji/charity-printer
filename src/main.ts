@@ -108,6 +108,8 @@ const printerStatusText = document.getElementById('printer-status-text') as HTML
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
 const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanElement;
+const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
+const mainAutoPrintStatus = document.getElementById('main-auto-print-status') as HTMLDivElement;
 const cardsContainer = document.getElementById('cards-container') as HTMLDivElement;
 const searchInput = document.getElementById('search-input') as HTMLInputElement;
 const lastSyncTime = document.getElementById('last-sync-time') as HTMLSpanElement;
@@ -140,6 +142,33 @@ function shortLabel(key: string): string {
     'Please take a picture of your donation': 'Photo',
   };
   return map[key] || key;
+}
+
+// Update Header Statuses
+function updateMainStatuses() {
+  if (autoSyncToggle.checked) {
+    mainAutoSyncStatus.textContent = 'Auto-Sync: On';
+    mainAutoSyncStatus.style.background = 'rgba(74, 222, 128, 0.2)';
+    mainAutoSyncStatus.style.color = '#4ade80';
+    mainAutoSyncStatus.style.borderColor = 'rgba(74, 222, 128, 0.4)';
+  } else {
+    mainAutoSyncStatus.textContent = 'Auto-Sync: Off';
+    mainAutoSyncStatus.style.background = 'var(--glass-bg)';
+    mainAutoSyncStatus.style.color = 'var(--text-muted)';
+    mainAutoSyncStatus.style.borderColor = 'var(--glass-border)';
+  }
+
+  if (autoPrintToggle.checked) {
+    mainAutoPrintStatus.textContent = 'Auto-Print: On';
+    mainAutoPrintStatus.style.background = 'rgba(99, 102, 241, 0.2)';
+    mainAutoPrintStatus.style.color = '#818cf8';
+    mainAutoPrintStatus.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+  } else {
+    mainAutoPrintStatus.textContent = 'Auto-Print: Off';
+    mainAutoPrintStatus.style.background = 'var(--glass-bg)';
+    mainAutoPrintStatus.style.color = 'var(--text-muted)';
+    mainAutoPrintStatus.style.borderColor = 'var(--glass-border)';
+  }
 }
 
 // Initialization
@@ -187,6 +216,8 @@ function init() {
     printerStatus.textContent = 'Web Serial/USB APIs not supported (HTTPS required)';
     printerStatusText.textContent = 'APIs not supported';
   }
+
+  updateMainStatuses();
 }
 
 // Fetch Data from Google Sheets CSV
@@ -1486,10 +1517,12 @@ autoSyncToggle.addEventListener('change', () => {
   } else {
     stopAutoSync();
   }
+  updateMainStatuses();
 });
 
 autoPrintToggle.addEventListener('change', () => {
   localStorage.setItem('auto-print', String(autoPrintToggle.checked));
+  updateMainStatuses();
 });
 
 syncIntervalSelect.addEventListener('change', () => {
