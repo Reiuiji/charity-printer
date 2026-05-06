@@ -22,11 +22,15 @@ let isTemplateMode = false;
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
 const fetchDataBtn = document.getElementById('fetch-data-btn') as HTMLButtonElement;
 const connectPrinterBtn = document.getElementById('connect-printer-btn') as HTMLButtonElement;
+const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement;
+const testPrinterBtn = document.getElementById('test-printer-btn') as HTMLButtonElement;
+const exportPrintedBtn = document.getElementById('export-printed-btn') as HTMLButtonElement;
 const printerStatus = document.getElementById('printer-status') as HTMLDivElement;
 const cardsContainer = document.getElementById('cards-container') as HTMLDivElement;
 const searchInput = document.getElementById('search-input') as HTMLInputElement;
 const lastSyncTime = document.getElementById('last-sync-time') as HTMLSpanElement;
 const autoSyncToggle = document.getElementById('auto-sync-toggle') as HTMLInputElement;
+const autoPrintToggle = document.getElementById('auto-print-toggle') as HTMLInputElement;
 const syncIntervalSelect = document.getElementById('sync-interval') as HTMLSelectElement;
 const countdownDisplay = document.getElementById('countdown-display') as HTMLDivElement;
 const countdownValue = document.getElementById('countdown-value') as HTMLSpanElement;
@@ -81,6 +85,11 @@ function init() {
     autoSyncToggle.checked = true;
     startAutoSync();
   }
+  
+  const savedAutoPrint = localStorage.getItem('auto-print');
+  if (savedAutoPrint === 'true') {
+    autoPrintToggle.checked = true;
+  }
 
   // Check if serial is supported
   if (!('serial' in navigator)) {
@@ -128,6 +137,10 @@ async function fetchData() {
         const now = new Date().toISOString();
         localStorage.setItem('last-sync', now);
         lastSyncTime.textContent = new Date(now).toLocaleString();
+        
+        if (autoPrintToggle.checked && port && port.writable) {
+          autoPrintNewItems();
+        }
       },
       error: (err: any) => {
         alert('Error parsing CSV: ' + err.message);
@@ -143,6 +156,32 @@ async function fetchData() {
 
 function saveCards() {
   localStorage.setItem('cards-data', JSON.stringify(cards));
+}
+
+async function autoPrintNewItems() {
+  let printedIds: Set<string> = new Set();
+  try {
+    const saved = localStorage.getItem('printed-items');
+    if (saved) printedIds = new Set(JSON.parse(saved));
+  } catch(e) {}
+  
+  const unprintedCards = cards.filter(c => !printedIds.has(c.id));
+  if (unprintedCards.length === 0) return;
+  
+  for (const card of unprintedCards) {
+     try {
+       const lines = await generatePrintLines(card);
+       await sendLinesToPrinter(lines);
+       
+       printedIds.add(card.id);
+       localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+       
+       await new Promise(r => setTimeout(r, 500));
+     } catch (err) {
+       console.error("Auto-print failed for", card.id, err);
+     }
+  }
+  renderCards(searchInput.value);
 }
 
 // Render Cards
@@ -1320,11 +1359,95 @@ autoSyncToggle.addEventListener('change', () => {
   }
 });
 
+autoPrintToggle.addEventListener('change', () => {
+  localStorage.setItem('auto-print', String(autoPrintToggle.checked));
+});
+
 syncIntervalSelect.addEventListener('change', () => {
   localStorage.setItem('sync-interval', syncIntervalSelect.value);
   if (autoSyncToggle.checked) {
     startAutoSync();
   }
+});
+
+// Theme Toggle
+let isLightMode = localStorage.getItem('theme') === 'light';
+function applyTheme() {
+  if (isLightMode) {
+    document.body.classList.add('light-theme');
+    themeToggleBtn.textContent = '🌙';
+  } else {
+    document.body.classList.remove('light-theme');
+    themeToggleBtn.textContent = '☀️';
+  }
+}
+applyTheme();
+
+themeToggleBtn.addEventListener('click', () => {
+  isLightMode = !isLightMode;
+  localStorage.setItem('theme', isLightMode ? 'light' : 'dark');
+  applyTheme();
+});
+
+// Test Printer
+testPrinterBtn.addEventListener('click', async () => {
+  if (!port || !port.writable) {
+    alert('Printer not connected! Please connect the printer first.');
+    return;
+  }
+  const originalText = testPrinterBtn.textContent;
+  testPrinterBtn.textContent = 'Testing...';
+  testPrinterBtn.disabled = true;
+  try {
+    const testLines: PrintLine[] = [
+      { enabled: true, text: 'PRINTER DIAGNOSTICS', bold: true, align: 'center', size: 'large' },
+      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true },
+      { enabled: true, text: `Time: ${new Date().toLocaleString()}`, bold: false, align: 'left', size: 'normal' },
+      { enabled: true, text: 'Connection: Web Serial API', bold: false, align: 'left', size: 'normal' },
+      { enabled: true, text: 'Status: OK', bold: false, align: 'left', size: 'normal' },
+      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true },
+      { enabled: true, text: 'MUNBYN', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, gamma: 1.0 },
+      { enabled: true, text: 'Web Receipt Printer Ready', bold: false, align: 'center', size: 'normal' }
+    ];
+    await updateBarcodeQrImage(testLines[6], -1); // generate barcode
+    await sendLinesToPrinter(testLines);
+  } catch (err: any) {
+    alert('Diagnostic print failed: ' + err.message);
+  } finally {
+    testPrinterBtn.textContent = originalText;
+    testPrinterBtn.disabled = false;
+  }
+});
+
+// Export Printed Log
+exportPrintedBtn.addEventListener('click', () => {
+  if (!cards || cards.length === 0) return alert('No data loaded.');
+  
+  let printedIds: string[] = [];
+  try {
+    const saved = localStorage.getItem('printed-items');
+    if (saved) printedIds = JSON.parse(saved);
+  } catch(e) {}
+  
+  const headers = Object.keys(cards[0]);
+  const csvHeaders = headers.join(',') + ',"Printed"\n';
+  
+  const rows = cards.map(c => {
+    const vals = headers.map(h => {
+      const v = String(c[h] || '').replace(/"/g, '""');
+      return `"${v}"`;
+    });
+    const isPrinted = printedIds.includes(c.id) ? 'Yes' : 'No';
+    return vals.join(',') + `,"${isPrinted}"`;
+  }).join('\n');
+  
+  const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvHeaders + rows);
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `print_log_${new Date().getTime()}.csv`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
 });
 
 // Init

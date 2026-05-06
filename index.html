@@ -11,7 +11,9 @@
     <div id="app">
       <header class="glass-header">
         <h1>Receipt Printer Dashboard</h1>
-        <div class="header-controls">
+        <div class="header-controls" style="display: flex; gap: 10px; align-items: center;">
+          <button id="theme-toggle-btn" class="btn secondary-btn" style="padding: 8px;">☀️</button>
+          <button id="test-printer-btn" class="btn secondary-btn">🧪 Test Print</button>
           <button id="connect-printer-btn" class="btn primary-btn">
             <span class="icon">🖨️</span> Connect Printer
           </button>
@@ -35,6 +37,13 @@
               <label for="auto-sync-toggle">Auto Sync</label>
               <label class="toggle-switch">
                 <input type="checkbox" id="auto-sync-toggle" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="auto-sync-header" style="margin-top: 10px; margin-bottom: 10px;">
+              <label for="auto-print-toggle" style="color: var(--secondary-color); font-weight: 600;">Auto-Print 🖨️</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="auto-print-toggle" />
                 <span class="toggle-slider"></span>
               </label>
             </div>
@@ -75,6 +84,7 @@
               <div class="search-box">
                 <input type="text" id="search-input" placeholder="Search items..." />
               </div>
+              <button class="btn secondary-btn" id="export-printed-btn">📋 Export Log</button>
               <button class="btn secondary-btn" id="edit-template-btn">⚙️ Edit Base Template</button>
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>

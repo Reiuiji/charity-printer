@@ -12,6 +12,17 @@
   --danger-color: #ef4444;
 }
 
+body.light-theme {
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  --primary-color: #4f46e5;
+  --secondary-color: #059669;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
