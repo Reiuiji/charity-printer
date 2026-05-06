@@ -25,3 +25,5 @@ dist-ssr
 
 # Antigravity
 .agents/*
+
+*.ignore

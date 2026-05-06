@@ -8,9 +8,85 @@ interface CardData {
   [key: string]: string;
 }
 
+interface PrinterTransport {
+  type: string;
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  write(data: Uint8Array): Promise<void>;
+}
+
+class SerialPrinterTransport implements PrinterTransport {
+  type = 'serial';
+  port: any | null = null;
+  async connect() {
+    this.port = await (navigator as any).serial.requestPort();
+    await this.port.open({ baudRate: 9600 });
+  }
+  async disconnect() {
+    if (this.port) await this.port.close();
+  }
+  async write(data: Uint8Array) {
+    if (!this.port || !this.port.writable) throw new Error('Port not writable');
+    const writer = this.port.writable.getWriter();
+    await writer.write(data);
+    writer.releaseLock();
+  }
+}
+
+class UsbPrinterTransport implements PrinterTransport {
+  type = 'usb';
+  device: any | null = null;
+  outEndpoint: number = -1;
+  async connect() {
+    this.device = await (navigator as any).usb.requestDevice({ filters: [] });
+    await this.device.open();
+    if (this.device.configuration === null) await this.device.selectConfiguration(1);
+    await this.device.claimInterface(0);
+    const iface = this.device.configuration.interfaces[0];
+    const alt = iface.alternates[0];
+    for (const ep of alt.endpoints) {
+      if (ep.direction === 'out' && ep.type === 'bulk') {
+        this.outEndpoint = ep.endpointNumber;
+      }
+    }
+  }
+  async disconnect() {
+    if (this.device) await this.device.close();
+  }
+  async write(data: Uint8Array) {
+    if (!this.device || this.outEndpoint === -1) throw new Error('USB Device not connected');
+    await this.device.transferOut(this.outEndpoint, data);
+  }
+}
+
+class NetworkPrinterTransport implements PrinterTransport {
+  type = 'network';
+  ws: WebSocket | null = null;
+  ip: string;
+  constructor(ip: string) {
+    this.ip = ip;
+  }
+  async connect() {
+    return new Promise<void>((resolve, reject) => {
+      let url = this.ip;
+      if (!url.startsWith('ws://')) url = 'ws://' + url;
+      this.ws = new WebSocket(url);
+      this.ws.onopen = () => resolve();
+      this.ws.onerror = () => reject(new Error('WebSocket connection failed'));
+    });
+  }
+  async disconnect() {
+    if (this.ws) this.ws.close();
+  }
+  async write(data: Uint8Array) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not open');
+    this.ws.send(data as any);
+  }
+}
+
 // Global state
 let cards: CardData[] = [];
-let port: SerialPort | null = null;
+let activeTransport: PrinterTransport | null = null;
 let currentEditId: string | null = null;
 let autoSyncTimer: ReturnType<typeof setInterval> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -21,6 +97,8 @@ let isTemplateMode = false;
 // DOM Elements
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
 const fetchDataBtn = document.getElementById('fetch-data-btn') as HTMLButtonElement;
+const connectionTypeSelect = document.getElementById('connection-type') as HTMLSelectElement;
+const networkIpInput = document.getElementById('network-ip') as HTMLInputElement;
 const connectPrinterBtn = document.getElementById('connect-printer-btn') as HTMLButtonElement;
 const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement;
 const testPrinterBtn = document.getElementById('test-printer-btn') as HTMLButtonElement;
@@ -91,11 +169,18 @@ function init() {
     autoPrintToggle.checked = true;
   }
 
-  // Check if serial is supported
-  if (!('serial' in navigator)) {
-    printerStatus.textContent = 'Web Serial API not supported';
-    printerStatus.className = 'status disconnected';
-    connectPrinterBtn.disabled = true;
+  // Initialize connection UI
+  connectionTypeSelect.addEventListener('change', () => {
+    if (connectionTypeSelect.value === 'network') {
+      networkIpInput.classList.remove('hidden');
+    } else {
+      networkIpInput.classList.add('hidden');
+    }
+  });
+
+  // Check support warnings, but don't disable since they might use Network
+  if (!('serial' in navigator) && !('usb' in navigator)) {
+    printerStatus.textContent = 'Web Serial/USB APIs not supported (HTTPS required)';
   }
 }
 
@@ -138,7 +223,7 @@ async function fetchData() {
         localStorage.setItem('last-sync', now);
         lastSyncTime.textContent = new Date(now).toLocaleString();
         
-        if (autoPrintToggle.checked && port && port.writable) {
+        if (autoPrintToggle.checked && activeTransport) {
           autoPrintNewItems();
         }
       },
@@ -452,27 +537,51 @@ editModal.addEventListener('click', (e) => {
 
 // Printer Logic
 async function connectPrinter() {
-  if (!('serial' in navigator)) {
-    alert('Web Serial API not supported in this browser. Please use Chrome/Edge.');
-    return;
-  }
+  const type = connectionTypeSelect.value;
 
   try {
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 9600 }); // Receipt printers usually default to 9600 or 115200
+    if (activeTransport) {
+      await activeTransport.disconnect();
+      activeTransport = null;
+    }
 
-    printerStatus.textContent = 'Connected';
+    if (type === 'serial') {
+      if (!('serial' in navigator)) throw new Error('Web Serial API not supported in this browser.');
+      activeTransport = new SerialPrinterTransport();
+    } else if (type === 'usb') {
+      if (!('usb' in navigator)) throw new Error('Web USB API not supported in this browser.');
+      activeTransport = new UsbPrinterTransport();
+    } else if (type === 'network') {
+      const ip = networkIpInput.value.trim();
+      if (!ip) throw new Error('Please enter a valid WebSocket IP (e.g. ws://192.168.1.100:9100)');
+      activeTransport = new NetworkPrinterTransport(ip);
+    }
+
+    connectPrinterBtn.textContent = 'Connecting...';
+    connectPrinterBtn.disabled = true;
+
+    await activeTransport!.connect();
+
+    printerStatus.textContent = 'Connected (' + type.toUpperCase() + ')';
     printerStatus.className = 'status connected';
     
-    port.addEventListener('disconnect', () => {
-      printerStatus.textContent = 'Disconnected';
-      printerStatus.className = 'status disconnected';
-      port = null;
-    });
+    if (type === 'serial' && (activeTransport as SerialPrinterTransport).port) {
+      (activeTransport as SerialPrinterTransport).port.addEventListener('disconnect', () => {
+        printerStatus.textContent = 'Disconnected';
+        printerStatus.className = 'status disconnected';
+        activeTransport = null;
+      });
+    }
 
   } catch (err: any) {
     console.error(err);
     alert('Failed to connect to printer: ' + err.message);
+    printerStatus.textContent = 'Disconnected';
+    printerStatus.className = 'status disconnected';
+    activeTransport = null;
+  } finally {
+    connectPrinterBtn.innerHTML = '<span class="icon">🖨️</span> Connect';
+    connectPrinterBtn.disabled = false;
   }
 }
 
@@ -1050,18 +1159,17 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
 
 // Send to Printer from preview
 async function sendLinesToPrinter(lines: PrintLine[]) {
-  if (!port || !port.writable) throw new Error('Printer not connected! Please connect the printer first.');
+  if (!activeTransport) throw new Error('Printer not connected! Please connect the printer first.');
   const enabledLines = lines.filter(l => l.enabled);
   if (enabledLines.length === 0) return;
 
-  const writer = port.writable.getWriter();
   const ESC = 0x1B;
   const GS = 0x1D;
   const textEncoder = new TextEncoder();
 
   try {
     // Init printer
-    await writer.write(new Uint8Array([ESC, 0x40]));
+    await activeTransport.write(new Uint8Array([ESC, 0x40]));
 
     for (const line of enabledLines) {
       if (line.isImage && line.imageUrl) {
@@ -1071,8 +1179,8 @@ async function sendLinesToPrinter(lines: PrintLine[]) {
         const rasterData = await convertImageToRaster(line.imageUrl, line.gamma || 1.0);
         if (rasterData) {
           const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
-          await writer.write(new Uint8Array([ESC, 0x61, alignByte]));
-          await writer.write(rasterData);
+          await activeTransport.write(new Uint8Array([ESC, 0x61, alignByte]));
+          await activeTransport.write(rasterData);
         } else {
           alert('Could not download or convert image: ' + line.imageUrl);
         }
@@ -1083,43 +1191,43 @@ async function sendLinesToPrinter(lines: PrintLine[]) {
       } else {
         // Alignment
         const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
-        await writer.write(new Uint8Array([ESC, 0x61, alignByte]));
+        await activeTransport.write(new Uint8Array([ESC, 0x61, alignByte]));
 
         // Size and Font
         if (line.size === 'xl') {
-          await writer.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
-          await writer.write(new Uint8Array([GS, 0x21, 0x22]));  // Triple height/width
+          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
+          await activeTransport.write(new Uint8Array([GS, 0x21, 0x22]));  // Triple height/width
         } else if (line.size === 'large') {
-          await writer.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
-          await writer.write(new Uint8Array([GS, 0x21, 0x11]));  // Double height/width
+          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
+          await activeTransport.write(new Uint8Array([GS, 0x21, 0x11]));  // Double height/width
         } else if (line.size === 'small') {
-          await writer.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
-          await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
+          await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
         } else if (line.size === 'xs') {
-          await writer.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
-          await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x01])); // Font B
+          await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
         } else {
-          await writer.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
-          await writer.write(new Uint8Array([GS, 0x21, 0x00]));
+          await activeTransport.write(new Uint8Array([ESC, 0x4D, 0x00])); // Font A
+          await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
         }
 
         // Bold
-        await writer.write(new Uint8Array([ESC, 0x45, line.bold ? 0x01 : 0x00]));
+        await activeTransport.write(new Uint8Array([ESC, 0x45, line.bold ? 0x01 : 0x00]));
 
         // Text
-        await writer.write(textEncoder.encode(line.text + '\n'));
+        await activeTransport.write(textEncoder.encode(line.text + '\n'));
       }
     }
 
     // Reset
-    await writer.write(new Uint8Array([GS, 0x21, 0x00]));
-    await writer.write(new Uint8Array([ESC, 0x45, 0x00]));
+    await activeTransport.write(new Uint8Array([GS, 0x21, 0x00]));
+    await activeTransport.write(new Uint8Array([ESC, 0x45, 0x00]));
 
     // Feed & cut
-    await writer.write(new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]));
-    await writer.write(new Uint8Array([GS, 0x56, 0x41, 0x10]));
-  } finally {
-    writer.releaseLock();
+    await activeTransport.write(new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]));
+    await activeTransport.write(new Uint8Array([GS, 0x56, 0x41, 0x10]));
+  } catch (err: any) {
+    alert('Print error: ' + err.message);
   }
 }
 
@@ -1262,7 +1370,7 @@ editTemplateBtn.addEventListener('click', async () => {
 
 const printAllUnprintedBtn = document.getElementById('print-all-unprinted-btn') as HTMLButtonElement;
 printAllUnprintedBtn.addEventListener('click', async () => {
-  if (!port || !port.writable) {
+  if (!activeTransport) {
     alert('Printer not connected! Please connect the printer first.');
     return;
   }
@@ -1391,7 +1499,7 @@ themeToggleBtn.addEventListener('click', () => {
 
 // Test Printer
 testPrinterBtn.addEventListener('click', async () => {
-  if (!port || !port.writable) {
+  if (!activeTransport) {
     alert('Printer not connected! Please connect the printer first.');
     return;
   }
