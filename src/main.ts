@@ -59,6 +59,7 @@ let printHistory: PrintHistoryLog[] = [];
 // DOM Elements
 const csvUrlInput = document.getElementById('csv-url') as HTMLInputElement;
 const fetchDataBtn = document.getElementById('fetch-data-btn') as HTMLButtonElement;
+const shareLinkBtn = document.getElementById('share-link-btn') as HTMLButtonElement;
 const connectionTypeSelect = document.getElementById('connection-type') as HTMLSelectElement;
 const connectionDescription = document.getElementById('connection-description') as HTMLDivElement;
 const networkIpInput = document.getElementById('network-ip') as HTMLInputElement;
@@ -158,8 +159,29 @@ function updateMainStatuses() {
 
 // Initialization
 function init() {
-  const savedUrl = localStorage.getItem('csv-url');
-  if (savedUrl) csvUrlInput.value = savedUrl;
+  const urlParams = new URLSearchParams(window.location.search);
+  const sheetParam = urlParams.get('sheet');
+  const autoSyncParam = urlParams.get('autoSync');
+  const syncIntervalParam = urlParams.get('syncInterval');
+  
+  if (autoSyncParam) localStorage.setItem('auto-sync', autoSyncParam);
+  if (syncIntervalParam) localStorage.setItem('sync-interval', syncIntervalParam);
+  
+  if (sheetParam) {
+    csvUrlInput.value = sheetParam;
+    localStorage.setItem('csv-url', sheetParam);
+    // Clean up URL so it's not permanently stuck there
+    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.pushState({path:newUrl}, '', newUrl);
+    
+    // Automatically trigger fetch for convenience
+    setTimeout(() => {
+      fetchData();
+    }, 500);
+  } else {
+    const savedUrl = localStorage.getItem('csv-url');
+    if (savedUrl) csvUrlInput.value = savedUrl;
+  }
 
   const savedCards = localStorage.getItem('cards-data');
   if (savedCards) {
@@ -1626,6 +1648,26 @@ function updateCountdownDisplay() {
 
 // Event Listeners
 fetchDataBtn.addEventListener('click', fetchData);
+
+shareLinkBtn.addEventListener('click', () => {
+  const url = csvUrlInput.value.trim();
+  if (!url) return alert('Please enter a valid Google Sheets CSV URL first.');
+  
+  const shareUrl = new URL(window.location.protocol + "//" + window.location.host + window.location.pathname);
+  shareUrl.searchParams.set('sheet', url);
+  shareUrl.searchParams.set('autoSync', autoSyncToggle.checked.toString());
+  shareUrl.searchParams.set('syncInterval', syncIntervalSelect.value);
+  
+  navigator.clipboard.writeText(shareUrl.toString()).then(() => {
+    const originalText = shareLinkBtn.textContent;
+    shareLinkBtn.textContent = '✅ Copied!';
+    setTimeout(() => {
+      shareLinkBtn.textContent = originalText;
+    }, 2000);
+  }).catch(err => {
+    alert('Failed to copy link: ' + err);
+  });
+});
 connectPrinterBtn.addEventListener('click', () => connectPrinter());
 searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputElement).value));
 
