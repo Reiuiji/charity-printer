@@ -796,16 +796,10 @@ function renderPrintPreview() {
   printLines.forEach((line, index) => {
     const control = document.createElement('div');
     control.className = 'print-line-control';
-    control.draggable = true;
-    control.style.cursor = 'grab';
+    control.draggable = false;
 
     // Drag and Drop Logic
     control.addEventListener('dragstart', (e) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'BUTTON') {
-        e.preventDefault();
-        return;
-      }
       dragStartIndex = index;
       if (e.dataTransfer) {
         e.dataTransfer.effectAllowed = 'move';
@@ -842,6 +836,13 @@ function renderPrintPreview() {
     dragHandle.style.cursor = 'grab';
     dragHandle.style.marginRight = '8px';
     dragHandle.style.color = '#888';
+    
+    dragHandle.addEventListener('mouseenter', () => {
+      control.draggable = true;
+    });
+    dragHandle.addEventListener('mouseleave', () => {
+      control.draggable = false;
+    });
     
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
