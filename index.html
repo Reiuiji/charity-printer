@@ -179,6 +179,11 @@
             <div style="display: flex; flex-direction: column; gap: 10px;">
               <button class="btn secondary-btn" id="view-history-btn" style="width: 100%; padding: 10px;">🕒 View Print History</button>
               <button class="btn secondary-btn" id="export-printed-btn" style="width: 100%; padding: 10px;">📋 Export Print Log (CSV)</button>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn secondary-btn" id="export-app-backup-btn" style="flex: 1; padding: 10px;">💾 Backup App State</button>
+                <button class="btn secondary-btn" id="import-app-backup-btn" style="flex: 1; padding: 10px;">📂 Restore Backup</button>
+                <input type="file" id="app-backup-file-input" accept=".json" class="hidden" />
+              </div>
             </div>
           </div>
         </div>

@@ -126,6 +126,9 @@ const connectPrinterBtn = document.getElementById('connect-printer-btn') as HTML
 const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement;
 const testPrinterBtn = document.getElementById('test-printer-btn') as HTMLButtonElement;
 const exportPrintedBtn = document.getElementById('export-printed-btn') as HTMLButtonElement;
+const exportAppBackupBtn = document.getElementById('export-app-backup-btn') as HTMLButtonElement;
+const importAppBackupBtn = document.getElementById('import-app-backup-btn') as HTMLButtonElement;
+const appBackupFileInput = document.getElementById('app-backup-file-input') as HTMLInputElement;
 const printerStatus = document.getElementById('printer-status') as HTMLDivElement;
 const printerStatusText = document.getElementById('printer-status-text') as HTMLSpanElement;
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
@@ -1826,6 +1829,59 @@ exportPrintedBtn.addEventListener('click', () => {
   document.body.appendChild(downloadAnchorNode);
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
+});
+
+// Export App Backup
+exportAppBackupBtn.addEventListener('click', () => {
+  const backup = {
+    'csv-url': localStorage.getItem('csv-url'),
+    'template-profiles': localStorage.getItem('template-profiles'),
+    'active-template-id': localStorage.getItem('active-template-id'),
+    'print-history': localStorage.getItem('print-history'),
+    'printed-items': localStorage.getItem('printed-items'),
+    'auto-sync': localStorage.getItem('auto-sync'),
+    'auto-print': localStorage.getItem('auto-print'),
+    'sync-interval': localStorage.getItem('sync-interval'),
+    'last-transport-type': localStorage.getItem('last-transport-type'),
+    'last-network-ip': localStorage.getItem('last-network-ip'),
+  };
+  
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `receipt_dashboard_backup_${Date.now()}.json`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+});
+
+// Import App Backup
+importAppBackupBtn.addEventListener('click', () => {
+  appBackupFileInput.click();
+});
+
+appBackupFileInput.addEventListener('change', (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const backup = JSON.parse(event.target?.result as string);
+      let count = 0;
+      for (const [key, value] of Object.entries(backup)) {
+        if (value !== null && value !== undefined) {
+          localStorage.setItem(key, value as string);
+          count++;
+        }
+      }
+      alert(`Successfully restored ${count} settings! The page will now reload to apply them.`);
+      window.location.reload();
+    } catch (err: any) {
+      alert('Error parsing backup file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
 });
 
 // Init
