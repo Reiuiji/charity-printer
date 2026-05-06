@@ -17,6 +17,7 @@ export interface PrintLine {
   gamma?: number;
   isQr?: boolean;
   isBarcode?: boolean;
+  barcodeFormat?: string;
 }
 
 export interface TemplateProfile {

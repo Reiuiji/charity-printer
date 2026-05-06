@@ -873,6 +873,32 @@ function renderPrintPreview() {
           }, 300);
         });
         topRow.appendChild(textInput);
+
+        if (line.isBarcode) {
+          const formatSelect = document.createElement('select');
+          formatSelect.style.marginLeft = '10px';
+          formatSelect.style.padding = '4px';
+          formatSelect.style.borderRadius = '4px';
+          formatSelect.style.background = 'rgba(0,0,0,0.2)';
+          formatSelect.style.color = 'var(--text-main)';
+          formatSelect.style.border = '1px solid var(--glass-border)';
+          
+          const formats = ['code128', 'code39', 'ean13', 'upca'];
+          formats.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f;
+            opt.textContent = f.toUpperCase();
+            opt.style.color = '#000';
+            formatSelect.appendChild(opt);
+          });
+          formatSelect.value = line.barcodeFormat || 'code128';
+          formatSelect.addEventListener('change', () => {
+             printLines[index].barcodeFormat = formatSelect.value;
+             updateBarcodeQrImage(printLines[index], index);
+             savePrintTemplate();
+          });
+          topRow.appendChild(formatSelect);
+        }
       } else {
         const textSpan = document.createElement('span');
         textSpan.textContent = `🖼️ Image: ${line.imageUrl?.split('/').pop() || 'Photo'}`;
@@ -1045,7 +1071,7 @@ async function updateBarcodeQrImage(line: PrintLine, index: number) {
   } else if (line.isBarcode) {
     try {
       const canvas = document.createElement('canvas');
-      bwipjs.toCanvas(canvas, { bcid: 'code128', text: evalText || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
+      bwipjs.toCanvas(canvas, { bcid: line.barcodeFormat || 'code128', text: evalText || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
       line.imageUrl = canvas.toDataURL('image/png');
     } catch {}
   }
