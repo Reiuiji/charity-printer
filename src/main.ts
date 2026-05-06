@@ -332,6 +332,7 @@ function renderSchemaMapper() {
     varInput.value = variable;
     varInput.className = 'form-input';
     varInput.style.flex = '1';
+    varInput.style.minWidth = '0';
     varInput.style.padding = '6px';
     varInput.style.borderRadius = '4px';
     varInput.style.background = 'rgba(0,0,0,0.2)';
@@ -358,6 +359,7 @@ function renderSchemaMapper() {
     const headerSelect = document.createElement('select');
     headerSelect.className = 'form-input';
     headerSelect.style.flex = '1';
+    headerSelect.style.minWidth = '0';
     headerSelect.style.padding = '6px';
     headerSelect.style.borderRadius = '4px';
     headerSelect.style.background = 'rgba(0,0,0,0.2)';
