@@ -468,6 +468,10 @@ const printPreviewSend = document.getElementById('print-preview-send') as HTMLBu
 const templateVariablesPanel = document.getElementById('template-variables-panel') as HTMLDivElement;
 const templateVariablesList = document.getElementById('template-variables-list') as HTMLDivElement;
 
+const importTemplateBtn = document.getElementById('import-template-btn') as HTMLButtonElement;
+const exportTemplateBtn = document.getElementById('export-template-btn') as HTMLButtonElement;
+const importTemplateFile = document.getElementById('import-template-file') as HTMLInputElement;
+
 function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -546,6 +550,8 @@ async function openPrintPreview(id: string) {
   isTemplateMode = false;
   printPreviewSend.textContent = '🖨️ Print';
   templateVariablesPanel.classList.add('hidden');
+  importTemplateBtn.classList.add('hidden');
+  exportTemplateBtn.classList.add('hidden');
   printLines = await generatePrintLines(card);
 
   renderPrintPreview();
@@ -1187,6 +1193,8 @@ editTemplateBtn.addEventListener('click', async () => {
   }
   
   templateVariablesPanel.classList.remove('hidden');
+  importTemplateBtn.classList.remove('hidden');
+  exportTemplateBtn.classList.remove('hidden');
   templateVariablesList.innerHTML = '';
   
   const sampleCard = cards[0];
@@ -1258,6 +1266,49 @@ printAllUnprintedBtn.addEventListener('click', async () => {
     printAllUnprintedBtn.disabled = false;
     renderCards(searchInput.value);
   }
+});
+
+exportTemplateBtn.addEventListener('click', () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(printLines, null, 2));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", "receipt-template.json");
+  document.body.appendChild(downloadAnchorNode); 
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+});
+
+importTemplateBtn.addEventListener('click', () => {
+  importTemplateFile.click();
+});
+
+importTemplateFile.addEventListener('change', (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const contents = ev.target?.result as string;
+      const importedLines = JSON.parse(contents);
+      if (Array.isArray(importedLines)) {
+        printLines = importedLines;
+        for (const line of printLines) {
+          if (line.isQr || line.isBarcode) {
+            await updateBarcodeQrImage(line, -1);
+          }
+        }
+        renderPrintPreview();
+        savePrintTemplate();
+        alert('Template imported successfully!');
+      } else {
+        throw new Error('Invalid format');
+      }
+    } catch (err) {
+      alert('Failed to parse template file. Make sure it is a valid JSON template.');
+    }
+    (document.getElementById('import-template-file') as HTMLInputElement).value = '';
+  };
+  reader.readAsText(file);
 });
 
 autoSyncToggle.addEventListener('change', () => {
