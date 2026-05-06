@@ -746,7 +746,7 @@ function closePrintPreviewModal() {
   isTemplateMode = false;
 }
 
-function renderPrintPreview() {
+function updateReceiptPaper() {
   savePrintTemplate();
   // Render receipt paper
   receiptPaper.innerHTML = '';
@@ -788,7 +788,10 @@ function renderPrintPreview() {
     div.textContent = (isTemplateMode && cards.length > 0) ? interpolate(line.text, lastClickedCard || cards[0]) : line.text;
     receiptPaper.appendChild(div);
   });
+}
 
+function renderPrintPreview() {
+  updateReceiptPaper();
   let dragStartIndex = -1;
 
   // Render controls
@@ -849,7 +852,7 @@ function renderPrintPreview() {
     checkbox.checked = line.enabled;
     checkbox.addEventListener('change', () => {
       printLines[index].enabled = checkbox.checked;
-      renderPrintPreview();
+      updateReceiptPaper();
     });
 
     topRow.appendChild(dragHandle);
@@ -979,7 +982,7 @@ function renderPrintPreview() {
       textInput.value = line.text;
       textInput.addEventListener('input', () => {
         printLines[index].text = textInput.value;
-        renderPrintPreview();
+        updateReceiptPaper();
       });
 
       const removeBtn = document.createElement('button');
@@ -1007,43 +1010,43 @@ function renderPrintPreview() {
       return btn;
     };
 
-    optionsRow.appendChild(makeBtn('Bold', line.bold, () => {
+    optionsRow.appendChild(makeBtn('Bold', line.bold || false, () => {
       printLines[index].bold = !printLines[index].bold;
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
 
     optionsRow.appendChild(makeBtn('Left', line.align === 'left', () => {
       printLines[index].align = 'left';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
     optionsRow.appendChild(makeBtn('Center', line.align === 'center', () => {
       printLines[index].align = 'center';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
     optionsRow.appendChild(makeBtn('Right', line.align === 'right', () => {
       printLines[index].align = 'right';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
 
     optionsRow.appendChild(makeBtn('XL', line.size === 'xl', () => {
       printLines[index].size = 'xl';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
     optionsRow.appendChild(makeBtn('Large', line.size === 'large', () => {
       printLines[index].size = 'large';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
     optionsRow.appendChild(makeBtn('Normal', line.size === 'normal', () => {
       printLines[index].size = 'normal';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
     optionsRow.appendChild(makeBtn('Small', line.size === 'small', () => {
       printLines[index].size = 'small';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
     optionsRow.appendChild(makeBtn('XS', line.size === 'xs', () => {
       printLines[index].size = 'xs';
-      renderPrintPreview();
+      updateReceiptPaper();
     }));
 
     control.appendChild(topRow);
