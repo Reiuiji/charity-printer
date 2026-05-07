@@ -818,7 +818,9 @@ previewEditBtn.addEventListener('click', () => {
 
 previewPrintBtn.addEventListener('click', () => {
   if (currentEditId) {
-    openPrintPreview(currentEditId);
+    const id = currentEditId;
+    closePreviewModal();
+    openPrintPreview(id);
   }
 });
 
@@ -937,8 +939,9 @@ modalPrintBtn.addEventListener('click', () => {
       renderCards(searchInput.value);
     }
     
-    openPrintPreview(currentEditId);
+    const idToPrint = currentEditId;
     closeEditModal();
+    openPrintPreview(idToPrint);
   }
 });
 

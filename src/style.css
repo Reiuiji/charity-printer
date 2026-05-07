@@ -498,11 +498,13 @@ body.light-theme select option {
   background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(5px);
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Changed from center to prevent top clipping */
   justify-content: center;
   z-index: 1000;
   opacity: 1;
   transition: opacity 0.3s;
+  overflow-y: auto;        /* Allow scrolling on the backdrop */
+  padding: 20px;           /* Breathing room */
 }
 
 .modal.hidden {
@@ -513,10 +515,9 @@ body.light-theme select option {
 .modal-content {
   width: 100%;
   max-width: 500px;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  padding: 30px;
+  margin: 40px auto;       /* Explicit vertical margins prevent flexbox clipping */
   position: relative;
+  padding: 30px;
   transform: translateY(0);
   transition: transform 0.3s;
 }
@@ -528,16 +529,12 @@ body.light-theme select option {
 /* Preview Modal (wider, full height) */
 .modal-preview {
   max-width: 720px;
-  max-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 #preview-body {
   flex: 1;
-  overflow-y: auto;
-  padding-right: 8px;
 }
 
 .preview-header {
@@ -621,9 +618,6 @@ body.light-theme select option {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding-right: 10px;
 }
 
 .modal-actions {
@@ -637,10 +631,8 @@ body.light-theme select option {
 /* Print Preview Modal */
 .modal-print-preview {
   max-width: 960px;
-  max-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .modal-print-preview h2 {
@@ -651,12 +643,8 @@ body.light-theme select option {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 24px;
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
 }
 
-/* Receipt Paper */
 .receipt-paper-wrap {
   display: flex;
   flex-direction: column;
@@ -670,7 +658,6 @@ body.light-theme select option {
   );
   border-radius: 8px;
   padding: 16px 8px;
-  overflow-y: auto;
 }
 
 .receipt-paper {
@@ -731,8 +718,8 @@ body.light-theme select option {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
   padding-right: 6px;
+  min-width: 0;
 }
 
 .print-controls h3 {
@@ -755,6 +742,7 @@ body.light-theme select option {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
   border: 1px solid var(--glass-border);
+  min-width: 0;
 }
 
 .print-line-top {
@@ -890,24 +878,15 @@ body.light-theme select option {
   }
 
   .receipt-paper-wrap {
-    flex: 0 0 40vh;
-    min-height: 40vh;
     padding-bottom: 16px;
-    overflow-y: auto;
   }
 
   .modal-content {
     width: 95%;
-    max-height: 95vh;
-  }
-  
-  .modal-print-preview {
-    max-height: 95vh;
   }
   
   .print-controls {
     flex: 1;
-    overflow-y: auto;
     padding-bottom: 20px;
   }
 }
