@@ -82,6 +82,9 @@ const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanEl
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
 const readOnlyToggle = document.getElementById('read-only-toggle') as HTMLInputElement;
+const customIdSettings = document.getElementById('custom-id-settings') as HTMLDivElement;
+const customIdPrefix = document.getElementById('custom-id-prefix') as HTMLInputElement;
+const customIdNext = document.getElementById('custom-id-next') as HTMLInputElement;
 const createCustomReceiptBtn = document.getElementById('create-custom-receipt-btn') as HTMLButtonElement;
 const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
 const mainAutoPrintStatus = document.getElementById('main-auto-print-status') as HTMLDivElement;
@@ -224,7 +227,14 @@ function init() {
   if (savedLiveEdit === 'true') {
     liveEditToggle.checked = true;
     createCustomReceiptBtn.classList.remove('hidden');
+    customIdSettings.classList.remove('hidden');
   }
+
+  const savedIdPrefix = localStorage.getItem('custom-id-prefix');
+  if (savedIdPrefix !== null) customIdPrefix.value = savedIdPrefix;
+
+  const savedIdNext = localStorage.getItem('custom-id-next');
+  if (savedIdNext !== null) customIdNext.value = savedIdNext;
 
   const savedReadOnly = localStorage.getItem('read-only');
   if (savedReadOnly === 'true') {
@@ -822,8 +832,6 @@ function openEditModal(id: string, newCardData?: CardData) {
   editFieldsContainer.innerHTML = '';
 
   for (const [key, value] of Object.entries(card)) {
-    if (key === 'id') continue;
-    
     const group = document.createElement('div');
     group.className = 'input-group';
     
@@ -834,6 +842,14 @@ function openEditModal(id: string, newCardData?: CardData) {
     input.type = 'text';
     input.name = key;
     input.value = value;
+    
+    if (key === 'id') {
+      input.readOnly = true;
+      input.style.backgroundColor = 'rgba(0,0,0,0.4)';
+      input.style.color = 'var(--text-muted)';
+      input.style.cursor = 'not-allowed';
+      input.title = 'Item ID cannot be modified';
+    }
     
     group.appendChild(label);
     group.appendChild(input);
@@ -1912,10 +1928,15 @@ liveEditToggle.addEventListener('change', () => {
   localStorage.setItem('live-edit', liveEditToggle.checked.toString());
   if (liveEditToggle.checked) {
     createCustomReceiptBtn.classList.remove('hidden');
+    customIdSettings.classList.remove('hidden');
   } else {
     createCustomReceiptBtn.classList.add('hidden');
+    customIdSettings.classList.add('hidden');
   }
 });
+
+customIdPrefix.addEventListener('input', () => localStorage.setItem('custom-id-prefix', customIdPrefix.value));
+customIdNext.addEventListener('input', () => localStorage.setItem('custom-id-next', customIdNext.value));
 
 readOnlyToggle.addEventListener('change', () => {
   localStorage.setItem('read-only', readOnlyToggle.checked.toString());
@@ -1927,7 +1948,20 @@ readOnlyToggle.addEventListener('change', () => {
 });
 
 createCustomReceiptBtn.addEventListener('click', () => {
-  const newId = 'custom-' + Date.now();
+  const prefix = customIdPrefix.value || 'CUSTOM-';
+  const nextNumStr = customIdNext.value || '1000';
+  const nextNum = parseInt(nextNumStr, 10);
+  const isNumberValid = !isNaN(nextNum);
+  
+  const actualNum = isNumberValid ? nextNum : 1000;
+  const newId = prefix + (isNumberValid ? nextNumStr : '1000');
+  
+  // Increment for next time while preserving zero-padding
+  const incremented = actualNum + 1;
+  const nextLength = nextNumStr.length;
+  customIdNext.value = incremented.toString().padStart(nextLength, '0');
+  localStorage.setItem('custom-id-next', customIdNext.value);
+  
   const newCard: CardData = { id: newId };
   
   if (cards.length > 0) {

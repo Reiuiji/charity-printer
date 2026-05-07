@@ -218,7 +218,21 @@
               <label for="live-edit-toggle">Enable Add Custom Item Button</label>
               <label class="toggle-switch"><input type="checkbox" id="live-edit-toggle" /><span class="toggle-slider"></span></label>
             </div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; margin-bottom: 15px;">Unlocks the ability to manually add new blank items to the dashboard and fill out their fields.</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; margin-bottom: 10px;">Unlocks the ability to manually add new blank items to the dashboard and fill out their fields.</p>
+            
+            <div id="custom-id-settings" class="hidden" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+              <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-main);">Custom ID Format</h4>
+              <div style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                  <label for="custom-id-prefix" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Prefix</label>
+                  <input type="text" id="custom-id-prefix" class="form-input" value="CUSTOM-" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.1); color: var(--text-main);" />
+                </div>
+                <div style="flex: 1;">
+                  <label for="custom-id-next" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Next Number</label>
+                  <input type="text" id="custom-id-next" class="form-input" value="1000" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.1); color: var(--text-main);" />
+                </div>
+              </div>
+            </div>
             
             <div class="auto-sync-header" style="display: flex; justify-content: space-between;">
               <label for="read-only-toggle" style="color: var(--danger-color); font-weight: 600;">Enable Read-Only Mode</label>
