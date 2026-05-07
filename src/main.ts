@@ -877,6 +877,17 @@ modalDeleteBtn.addEventListener('click', () => {
   }
 });
 
+function incrementCustomId() {
+  const nextNumStr = customIdNext.value || '1000';
+  const nextNum = parseInt(nextNumStr, 10);
+  const isNumberValid = !isNaN(nextNum);
+  const actualNum = isNumberValid ? nextNum : 1000;
+  const incremented = actualNum + 1;
+  const nextLength = nextNumStr.length;
+  customIdNext.value = incremented.toString().padStart(nextLength, '0');
+  localStorage.setItem('custom-id-next', customIdNext.value);
+}
+
 editForm.addEventListener('submit', (e) => {
   e.preventDefault();
   if (!currentEditId) return;
@@ -893,6 +904,7 @@ editForm.addEventListener('submit', (e) => {
 
   if (pendingNewCard) {
     cards.unshift(updatedCard);
+    incrementCustomId();
     pendingNewCard = null;
   } else {
     cards[cardIndex] = updatedCard;
@@ -919,6 +931,7 @@ modalPrintBtn.addEventListener('click', () => {
       renderCards(searchInput.value);
     } else if (pendingNewCard) {
       cards.unshift(tempCard);
+      incrementCustomId();
       pendingNewCard = null;
       saveCards();
       renderCards(searchInput.value);
@@ -1953,14 +1966,7 @@ createCustomReceiptBtn.addEventListener('click', () => {
   const nextNum = parseInt(nextNumStr, 10);
   const isNumberValid = !isNaN(nextNum);
   
-  const actualNum = isNumberValid ? nextNum : 1000;
   const newId = prefix + (isNumberValid ? nextNumStr : '1000');
-  
-  // Increment for next time while preserving zero-padding
-  const incremented = actualNum + 1;
-  const nextLength = nextNumStr.length;
-  customIdNext.value = incremented.toString().padStart(nextLength, '0');
-  localStorage.setItem('custom-id-next', customIdNext.value);
   
   const newCard: CardData = { id: newId };
   
