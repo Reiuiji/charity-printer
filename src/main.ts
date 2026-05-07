@@ -15,6 +15,7 @@ import {
 
 // Global state
 let cards: CardData[] = [];
+let pendingNewCard: CardData | null = null;
 let activeTransport: PrinterTransport | null = null;
 let currentEditId: string | null = null;
 let autoSyncTimer: ReturnType<typeof setInterval> | null = null;
@@ -77,6 +78,10 @@ const feedLinesInput = document.getElementById('feed-lines-input') as HTMLInputE
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
 const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanElement;
+
+// Advanced Features
+const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
+const createCustomReceiptBtn = document.getElementById('create-custom-receipt-btn') as HTMLButtonElement;
 const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
 const mainAutoPrintStatus = document.getElementById('main-auto-print-status') as HTMLDivElement;
 const cardsContainer = document.getElementById('cards-container') as HTMLDivElement;
@@ -106,6 +111,7 @@ const closeModal = document.getElementById('close-modal') as HTMLSpanElement;
 const editForm = document.getElementById('edit-form') as HTMLFormElement;
 const editFieldsContainer = document.getElementById('edit-fields-container') as HTMLDivElement;
 const modalPrintBtn = document.getElementById('modal-print-btn') as HTMLButtonElement;
+const modalDeleteBtn = document.getElementById('modal-delete-btn') as HTMLButtonElement;
 
 // Template Profile and History DOM
 const templateProfileSelect = document.getElementById('template-profile-select') as HTMLSelectElement;
@@ -209,6 +215,12 @@ function init() {
   const savedAutoPrint = localStorage.getItem('auto-print');
   if (savedAutoPrint === 'true') {
     autoPrintToggle.checked = true;
+  }
+
+  const savedLiveEdit = localStorage.getItem('live-edit');
+  if (savedLiveEdit === 'true') {
+    liveEditToggle.checked = true;
+    createCustomReceiptBtn.classList.remove('hidden');
   }
 
   // Load Profiles and History
@@ -792,8 +804,8 @@ previewPrintBtn.addEventListener('click', () => {
 });
 
 // Edit Modal
-function openEditModal(id: string) {
-  const card = cards.find(c => c.id === id);
+function openEditModal(id: string, newCardData?: CardData) {
+  const card = newCardData || cards.find(c => c.id === id);
   if (!card) return;
   lastClickedCard = card;
 
@@ -825,14 +837,27 @@ function openEditModal(id: string) {
 function closeEditModal() {
   editModal.classList.add('hidden');
   currentEditId = null;
+  pendingNewCard = null;
 }
+
+modalDeleteBtn.addEventListener('click', () => {
+  if (!currentEditId) return;
+  if (confirm('Are you sure you want to delete this item?')) {
+    if (!pendingNewCard) {
+      cards = cards.filter(c => c.id !== currentEditId);
+      saveCards();
+      renderCards(searchInput.value);
+    }
+    closeEditModal();
+  }
+});
 
 editForm.addEventListener('submit', (e) => {
   e.preventDefault();
   if (!currentEditId) return;
 
   const cardIndex = cards.findIndex(c => c.id === currentEditId);
-  if (cardIndex === -1) return;
+  if (cardIndex === -1 && !pendingNewCard) return;
 
   const formData = new FormData(editForm);
   const updatedCard = { id: currentEditId } as CardData;
@@ -841,7 +866,13 @@ editForm.addEventListener('submit', (e) => {
     updatedCard[key] = value.toString();
   });
 
-  cards[cardIndex] = updatedCard;
+  if (pendingNewCard) {
+    cards.unshift(updatedCard);
+    pendingNewCard = null;
+  } else {
+    cards[cardIndex] = updatedCard;
+  }
+
   saveCards();
   renderCards(searchInput.value);
   closeEditModal();
@@ -859,6 +890,11 @@ modalPrintBtn.addEventListener('click', () => {
     const cardIndex = cards.findIndex(c => c.id === currentEditId);
     if (cardIndex !== -1) {
       cards[cardIndex] = tempCard;
+      saveCards();
+      renderCards(searchInput.value);
+    } else if (pendingNewCard) {
+      cards.unshift(tempCard);
+      pendingNewCard = null;
       saveCards();
       renderCards(searchInput.value);
     }
@@ -1304,6 +1340,8 @@ function savePrintTemplate() {
     }
     // Also save legacy fallback just in case
     localStorage.setItem('base-print-template', JSON.stringify(printLines));
+  } else {
+    localStorage.setItem('custom-receipt-draft', JSON.stringify(printLines));
   }
 }
 
@@ -1805,7 +1843,8 @@ exportTemplateBtn.addEventListener('click', () => {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(printLines, null, 2));
   const downloadAnchorNode = document.createElement('a');
   downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", "receipt-template.json");
+  const filename = isTemplateMode ? "receipt-template.json" : "custom-receipt.json";
+  downloadAnchorNode.setAttribute("download", filename);
   document.body.appendChild(downloadAnchorNode); 
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
@@ -1855,8 +1894,37 @@ autoSyncToggle.addEventListener('change', () => {
 });
 
 autoPrintToggle.addEventListener('change', () => {
-  localStorage.setItem('auto-print', String(autoPrintToggle.checked));
+  localStorage.setItem('auto-print', autoPrintToggle.checked.toString());
   updateMainStatuses();
+});
+
+liveEditToggle.addEventListener('change', () => {
+  localStorage.setItem('live-edit', liveEditToggle.checked.toString());
+  if (liveEditToggle.checked) {
+    createCustomReceiptBtn.classList.remove('hidden');
+  } else {
+    createCustomReceiptBtn.classList.add('hidden');
+  }
+});
+
+createCustomReceiptBtn.addEventListener('click', () => {
+  const newId = 'custom-' + Date.now();
+  const newCard: CardData = { id: newId };
+  
+  if (cards.length > 0) {
+    // Copy the schema structure from the first card, but leave values blank
+    for (const key of Object.keys(cards[0])) {
+      if (key !== 'id') newCard[key] = '';
+    }
+  } else {
+    // If no cards exist yet, just create basic default fields
+    newCard['Donation #'] = 'Custom';
+    newCard['Brief Identifier'] = 'Custom Item';
+    newCard['Starting Bid'] = '0';
+  }
+  
+  pendingNewCard = newCard;
+  openEditModal(newId, newCard);   // Immediately open the standard edit modal so they can fill it out!
 });
 
 syncIntervalSelect.addEventListener('change', () => {

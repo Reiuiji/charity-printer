@@ -36,6 +36,7 @@
               </div>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn secondary-btn hidden" id="create-custom-receipt-btn">➕ Add Item</button>
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>
           </div>
@@ -77,9 +78,12 @@
             <div id="edit-fields-container">
               <!-- Dynamic fields -->
             </div>
-            <div class="modal-actions">
-              <button type="submit" class="btn primary-btn">Save Changes</button>
-              <button type="button" class="btn print-btn" id="modal-print-btn">Print Now</button>
+            <div class="modal-actions" style="justify-content: space-between;">
+              <button type="button" class="btn secondary-btn" id="modal-delete-btn" style="color: var(--danger-color); border-color: rgba(239, 68, 68, 0.4);">🗑️ Delete</button>
+              <div style="display: flex; gap: 12px;">
+                <button type="submit" class="btn primary-btn">Save</button>
+                <button type="button" class="btn print-btn" id="modal-print-btn">Print Now</button>
+              </div>
             </div>
           </form>
         </div>
@@ -203,6 +207,18 @@
               <button class="btn secondary-btn" id="delete-template-btn" title="Delete Profile">🗑️</button>
             </div>
             <button class="btn secondary-btn" id="edit-template-btn" style="width: 100%; padding: 10px;">⚙️ Edit Selected Template</button>
+          </div>
+
+          <hr>
+
+          <!-- Advanced Features -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">🛠️ Advanced Features</h3>
+            <div class="auto-sync-header" style="display: flex; justify-content: space-between;">
+              <label for="live-edit-toggle">Enable Add Custom Item Button</label>
+              <label class="toggle-switch"><input type="checkbox" id="live-edit-toggle" /><span class="toggle-slider"></span></label>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Unlocks the ability to manually add new blank items to the dashboard and fill out their fields.</p>
           </div>
 
           <hr>
