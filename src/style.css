@@ -911,3 +911,38 @@ body.light-theme select option {
     padding-bottom: 20px;
   }
 }
+
+body.read-only-mode .edit-btn,
+body.read-only-mode #preview-edit-btn,
+body.read-only-mode #create-custom-receipt-btn,
+body.read-only-mode #print-edit-controls-wrapper,
+body.read-only-mode #import-template-btn,
+body.read-only-mode #export-template-btn {
+  display: none !important;
+}
+
+/* Read Only Mode Print Preview Layout Adjustments */
+body.read-only-mode .modal-print-preview {
+  max-width: 450px;
+}
+
+body.read-only-mode .print-preview-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+body.read-only-mode .receipt-paper-wrap {
+  width: 100%;
+  max-width: 350px;
+}
+
+body.read-only-mode .print-controls {
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+body.read-only-mode .print-controls .modal-actions {
+  justify-content: center;
+}

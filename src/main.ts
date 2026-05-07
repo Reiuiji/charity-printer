@@ -81,6 +81,7 @@ const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanEl
 
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
+const readOnlyToggle = document.getElementById('read-only-toggle') as HTMLInputElement;
 const createCustomReceiptBtn = document.getElementById('create-custom-receipt-btn') as HTMLButtonElement;
 const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
 const mainAutoPrintStatus = document.getElementById('main-auto-print-status') as HTMLDivElement;
@@ -169,9 +170,11 @@ function init() {
   const sheetParam = urlParams.get('sheet');
   const autoSyncParam = urlParams.get('autoSync');
   const syncIntervalParam = urlParams.get('syncInterval');
+  const readOnlyParam = urlParams.get('readOnly');
   
   if (autoSyncParam) localStorage.setItem('auto-sync', autoSyncParam);
   if (syncIntervalParam) localStorage.setItem('sync-interval', syncIntervalParam);
+  if (readOnlyParam) localStorage.setItem('read-only', readOnlyParam);
   
   if (sheetParam) {
     csvUrlInput.value = sheetParam;
@@ -221,6 +224,12 @@ function init() {
   if (savedLiveEdit === 'true') {
     liveEditToggle.checked = true;
     createCustomReceiptBtn.classList.remove('hidden');
+  }
+
+  const savedReadOnly = localStorage.getItem('read-only');
+  if (savedReadOnly === 'true') {
+    readOnlyToggle.checked = true;
+    document.body.classList.add('read-only-mode');
   }
 
   // Load Profiles and History
@@ -1695,6 +1704,7 @@ shareLinkBtn.addEventListener('click', () => {
   shareUrl.searchParams.set('sheet', url);
   shareUrl.searchParams.set('autoSync', autoSyncToggle.checked.toString());
   shareUrl.searchParams.set('syncInterval', syncIntervalSelect.value);
+  shareUrl.searchParams.set('readOnly', readOnlyToggle.checked.toString());
   
   navigator.clipboard.writeText(shareUrl.toString()).then(() => {
     const originalText = shareLinkBtn.textContent;
@@ -1904,6 +1914,15 @@ liveEditToggle.addEventListener('change', () => {
     createCustomReceiptBtn.classList.remove('hidden');
   } else {
     createCustomReceiptBtn.classList.add('hidden');
+  }
+});
+
+readOnlyToggle.addEventListener('change', () => {
+  localStorage.setItem('read-only', readOnlyToggle.checked.toString());
+  if (readOnlyToggle.checked) {
+    document.body.classList.add('read-only-mode');
+  } else {
+    document.body.classList.remove('read-only-mode');
   }
 });
 

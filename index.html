@@ -218,7 +218,13 @@
               <label for="live-edit-toggle">Enable Add Custom Item Button</label>
               <label class="toggle-switch"><input type="checkbox" id="live-edit-toggle" /><span class="toggle-slider"></span></label>
             </div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Unlocks the ability to manually add new blank items to the dashboard and fill out their fields.</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; margin-bottom: 15px;">Unlocks the ability to manually add new blank items to the dashboard and fill out their fields.</p>
+            
+            <div class="auto-sync-header" style="display: flex; justify-content: space-between;">
+              <label for="read-only-toggle" style="color: var(--danger-color); font-weight: 600;">Enable Read-Only Mode</label>
+              <label class="toggle-switch"><input type="checkbox" id="read-only-toggle" /><span class="toggle-slider" style="background-color: var(--danger-color);"></span></label>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Hides all edit buttons and makes the dashboard strictly for printing. (Dummy-proof mode)</p>
           </div>
 
           <hr>
@@ -255,17 +261,19 @@
             </div>
             <!-- Field Controls -->
             <div class="print-controls">
-              <div id="template-variables-panel" class="hidden" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                <h3 style="margin-top: 0; font-size: 0.9rem; color: #fbbf24;">Available Variables (Click to copy)</h3>
-                <div id="template-variables-list" style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; max-height: 120px; overflow-y: auto;"></div>
-              </div>
-              <h3>Receipt Lines</h3>
-              <div id="print-lines-controls"></div>
-              <div style="margin-top: 15px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
-                <button type="button" class="btn secondary-btn" id="add-print-line-btn">➕ Add Text</button>
-                <button type="button" class="btn secondary-btn" id="add-qr-btn">➕ Add QR</button>
-                <button type="button" class="btn secondary-btn" id="add-barcode-btn">➕ Add Barcode</button>
-                <button type="button" class="btn secondary-btn" id="add-separator-btn">➕ Add Separator</button>
+              <div id="print-edit-controls-wrapper">
+                <div id="template-variables-panel" class="hidden" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                  <h3 style="margin-top: 0; font-size: 0.9rem; color: #fbbf24;">Available Variables (Click to copy)</h3>
+                  <div id="template-variables-list" style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; max-height: 120px; overflow-y: auto;"></div>
+                </div>
+                <h3>Receipt Lines</h3>
+                <div id="print-lines-controls"></div>
+                <div style="margin-top: 15px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
+                  <button type="button" class="btn secondary-btn" id="add-print-line-btn">➕ Add Text</button>
+                  <button type="button" class="btn secondary-btn" id="add-qr-btn">➕ Add QR</button>
+                  <button type="button" class="btn secondary-btn" id="add-barcode-btn">➕ Add Barcode</button>
+                  <button type="button" class="btn secondary-btn" id="add-separator-btn">➕ Add Separator</button>
+                </div>
               </div>
           <div class="modal-actions">
             <input type="file" id="import-template-file" style="display: none;" accept=".json" />
