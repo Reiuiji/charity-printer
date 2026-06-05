@@ -931,35 +931,51 @@ body.read-only-mode .print-controls .modal-actions {
   @page {
     margin: 0;
   }
-  
-  /* Hide all elements on the page by default */
-  body * {
-    visibility: hidden;
+
+  /* Reset body/html styling for clean printing flow */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  
-  /* Show only the print preview modal backdrop */
-  #print-preview-modal,
-  #print-preview-modal * {
-    visibility: visible;
+
+  /* Completely remove other major layouts and modals from the DOM flow */
+  #app > header,
+  #app > main,
+  #app > footer,
+  #app > .modal:not(#print-preview-modal) {
+    display: none !important;
   }
-  
-  /* Position the print preview modal to occupy the whole page without styling */
+
+  /* Ensure #app does not restrict the page height */
+  #app {
+    display: block !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Make print-preview-modal take up full screen height/width */
   #print-preview-modal {
+    display: block !important;
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    height: auto;
-    margin: 0;
-    padding: 0;
-    background: transparent !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
     backdrop-filter: none !important;
+    box-shadow: none !important;
     overflow: visible !important;
-    display: block !important;
   }
-  
+
   #print-preview-modal .modal-content {
-    background: transparent !important;
+    background: white !important;
     border: none !important;
     box-shadow: none !important;
     margin: 0 !important;
@@ -968,20 +984,20 @@ body.read-only-mode .print-controls .modal-actions {
     max-width: 100% !important;
     transform: none !important;
   }
-  
-  /* Hide close button, header and editing panels in the printout */
+
+  /* Hide close button, header, right controls and print triggers in the printout */
   #print-preview-modal h2,
   #close-print-preview,
   .print-controls,
   .modal-actions {
     display: none !important;
   }
-  
-  /* Center and align the receipt wrapper */
+
+  /* Reset layout structure for printing */
   .print-preview-layout {
     display: block !important;
   }
-  
+
   .receipt-paper-wrap {
     background: transparent !important;
     padding: 0 !important;
@@ -989,7 +1005,7 @@ body.read-only-mode .print-controls .modal-actions {
     width: 100% !important;
     display: block !important;
   }
-  
+
   .receipt-paper {
     width: 100% !important;
     max-width: 100% !important;
@@ -1001,7 +1017,7 @@ body.read-only-mode .print-controls .modal-actions {
     margin: 0 !important;
     filter: none !important;
   }
-  
+
   .receipt-paper::after {
     display: none !important; /* Hide the serrated bottom cut visual indicator in print */
   }
