@@ -1022,4 +1022,10 @@ body.read-only-mode .print-controls .modal-actions {
   .receipt-paper::after {
     display: none !important; /* Hide the serrated bottom cut visual indicator in print */
   }
+
+  .receipt-line img {
+    max-width: 80% !important; /* Limit width in print to reduce printer head power draw and prevent resets */
+    margin: 0 auto;
+    display: block;
+  }
 }
