@@ -10,6 +10,7 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
   --danger-color: #ef4444;
+  --print-image-width: 80%;
 }
 
 body.light-theme {
@@ -713,6 +714,12 @@ body.light-theme select option {
   color: #999;
 }
 
+.receipt-line img {
+  max-width: var(--print-image-width, 80%);
+  margin: 0 auto;
+  display: block;
+}
+
 /* Print Controls */
 .print-controls {
   display: flex;
@@ -1024,7 +1031,7 @@ body.read-only-mode .print-controls .modal-actions {
   }
 
   .receipt-line img {
-    max-width: 80% !important; /* Limit width in print to reduce printer head power draw and prevent resets */
+    max-width: var(--print-image-width, 80%) !important; /* Limit width in print to reduce printer head power draw and prevent resets */
     margin: 0 auto;
     display: block;
   }

@@ -82,6 +82,7 @@ const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanEl
 const browserPrintSettings = document.getElementById('browser-print-settings') as HTMLDivElement;
 const browserPaperSize = document.getElementById('browser-paper-size') as HTMLSelectElement;
 const browserPrintScale = document.getElementById('browser-print-scale') as HTMLSelectElement;
+const browserImageWidth = document.getElementById('browser-image-width') as HTMLSelectElement;
 
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
@@ -174,6 +175,7 @@ function updateMainStatuses() {
 function applyBrowserPrintSettings() {
   const paperSize = localStorage.getItem('browser-paper-size') || '80mm';
   const scale = localStorage.getItem('browser-print-scale') || '100%';
+  const imgWidth = localStorage.getItem('browser-image-width') || '80%';
   
   const width = paperSize === '58mm' ? '200px' : '280px';
   const baseFontSize = 13 * (parseFloat(scale) / 100);
@@ -181,6 +183,7 @@ function applyBrowserPrintSettings() {
   const root = document.documentElement;
   root.style.setProperty('--paper-width', width);
   root.style.setProperty('--paper-font-size', baseFontSize + 'px');
+  root.style.setProperty('--print-image-width', imgWidth);
 }
 
 // Initialization
@@ -263,6 +266,8 @@ function init() {
   browserPaperSize.value = savedPaperSize;
   const savedPrintScale = localStorage.getItem('browser-print-scale') || '100%';
   browserPrintScale.value = savedPrintScale;
+  const savedImageWidth = localStorage.getItem('browser-image-width') || '80%';
+  browserImageWidth.value = savedImageWidth;
   applyBrowserPrintSettings();
 
   browserPaperSize.addEventListener('change', () => {
@@ -271,6 +276,10 @@ function init() {
   });
   browserPrintScale.addEventListener('change', () => {
     localStorage.setItem('browser-print-scale', browserPrintScale.value);
+    applyBrowserPrintSettings();
+  });
+  browserImageWidth.addEventListener('change', () => {
+    localStorage.setItem('browser-image-width', browserImageWidth.value);
     applyBrowserPrintSettings();
   });
 
@@ -1175,7 +1184,7 @@ function updateReceiptPaper() {
       }
       img.src = normalizeImageUrl(src);
       
-      img.style.maxWidth = '100%';
+      img.style.maxWidth = 'var(--print-image-width, 80%)';
       img.style.display = 'inline-block';
       img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`; // Visual approximation of thermal print
       imgWrap.appendChild(img);
@@ -2044,7 +2053,7 @@ printAllUnprintedBtn.addEventListener('click', async () => {
             if (line.align === 'right') imgWrap.classList.add('align-right');
             const img = document.createElement('img');
             img.src = line.imageUrl;
-            img.style.maxWidth = '100%';
+            img.style.maxWidth = 'var(--print-image-width, 80%)';
             img.style.display = 'inline-block';
             img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`;
             imgWrap.appendChild(img);
