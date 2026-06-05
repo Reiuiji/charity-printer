@@ -929,6 +929,7 @@ body.read-only-mode .print-controls .modal-actions {
 /* Print Stylesheet for Browser Printing */
 @media print {
   @page {
+    size: auto;
     margin: 0;
   }
 
