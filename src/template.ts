@@ -60,7 +60,7 @@ export async function generatePrintLines(
     
     line.text = interpolate(line.text, card, schemaMapping, abstractVariables);
     if (line.isImage && line.imageUrl && !line.isQr && !line.isBarcode) {
-      line.imageUrl = interpolate(line.imageUrl, card, schemaMapping, abstractVariables);
+      line.imageUrl = normalizeImageUrl(interpolate(line.imageUrl, card, schemaMapping, abstractVariables));
       if (line.imageUrl && !line.imageUrl.startsWith('http') && !line.imageUrl.startsWith('data:')) {
         // Data is not a valid URL (e.g. text like 'None' or 'Yes'). Fallback to text mode.
         line.isImage = false;
@@ -74,4 +74,30 @@ export async function generatePrintLines(
     lines.push(line);
   }
   return lines;
+}
+
+export function normalizeImageUrl(url: string): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  
+  if (trimmed.includes('drive.google.com')) {
+    let fileId = '';
+    try {
+      const urlObj = new URL(trimmed);
+      fileId = urlObj.searchParams.get('id') || '';
+    } catch (e) {}
+    
+    if (!fileId) {
+      const match = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        fileId = match[1];
+      }
+    }
+    
+    if (fileId) {
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+  }
+  
+  return trimmed;
 }

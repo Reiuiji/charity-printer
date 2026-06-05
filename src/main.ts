@@ -4,7 +4,7 @@ import * as QRCode from 'qrcode';
 import * as bwipjs from 'bwip-js';
 
 import type { CardData, PrintLine, TemplateProfile, PrintHistoryLog, TemplateAssignments, SchemaProfile } from './types';
-import { generateDefaultTemplateLines, generatePrintLines, interpolate } from './template';
+import { generateDefaultTemplateLines, generatePrintLines, interpolate, normalizeImageUrl } from './template';
 import { sendLinesToPrinter as _sendLinesToPrinter } from './printer';
 import type { PrinterTransport } from './transport';
 import { 
@@ -814,7 +814,7 @@ function openPreviewModal(id: string) {
     );
     const isImage = isPhotoColumn && looksLikeImageUrl;
     const valueHtml = isImage
-      ? `<img src="${value.trim()}" alt="${shortLabel(key)}" class="preview-image" />`
+      ? `<img src="${normalizeImageUrl(value)}" alt="${shortLabel(key)}" class="preview-image" />`
       : `<span>${value}</span>`;
 
     fieldsHtml += `
@@ -1136,7 +1136,7 @@ function updateReceiptPaper() {
         const currentSchema = schemaProfiles[activeSchemaId];
         src = interpolate(src, lastClickedCard || cards[0], currentSchema?.mapping, currentSchema?.variables);
       }
-      img.src = src;
+      img.src = normalizeImageUrl(src);
       
       img.style.maxWidth = '100%';
       img.style.display = 'inline-block';
@@ -1535,12 +1535,13 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 
 async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<Uint8Array | null> {
   try {
+    const normalizedUrl = normalizeImageUrl(url);
     let img: HTMLImageElement;
     try {
-      img = await loadImage(url);
+      img = await loadImage(normalizedUrl);
     } catch {
       // Fallback to proxy to bypass CORS
-      img = await loadImage(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+      img = await loadImage(`https://corsproxy.io/?${encodeURIComponent(normalizedUrl)}`);
     }
 
     const canvas = document.createElement('canvas');
