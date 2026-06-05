@@ -80,7 +80,7 @@ export function normalizeImageUrl(url: string): string {
   if (!url) return '';
   const trimmed = url.trim();
   
-  if (trimmed.includes('drive.google.com')) {
+  if (trimmed.includes('drive.google.com') || trimmed.includes('docs.google.com')) {
     let fileId = '';
     try {
       const urlObj = new URL(trimmed);
@@ -95,7 +95,7 @@ export function normalizeImageUrl(url: string): string {
     }
     
     if (fileId) {
-      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+      return `https://lh3.googleusercontent.com/d/${fileId}`;
     }
   }
   
