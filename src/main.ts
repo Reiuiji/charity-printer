@@ -1059,6 +1059,43 @@ async function connectPrinter(existingDevice?: any) {
   }
 }
 
+async function triggerBrowserPrint() {
+  const wasConnectedTransport = activeTransport;
+  let existingPortOrDevice: any = null;
+  
+  if (wasConnectedTransport && (wasConnectedTransport.type === 'usb' || wasConnectedTransport.type === 'serial')) {
+    if (wasConnectedTransport.type === 'serial') {
+      existingPortOrDevice = (wasConnectedTransport as SerialPrinterTransport).port;
+    } else if (wasConnectedTransport.type === 'usb') {
+      existingPortOrDevice = (wasConnectedTransport as UsbPrinterTransport).device;
+    }
+    try {
+      await wasConnectedTransport.disconnect();
+      printerStatus.textContent = 'Disconnected';
+      printerStatus.className = 'status disconnected';
+      printerStatusText.textContent = 'Disconnected';
+      printerStatusText.className = 'status disconnected';
+      activeTransport = null;
+    } catch (e) {
+      console.error('Failed to release printer port', e);
+    }
+  }
+
+  // Open browser print dialog
+  window.print();
+
+  // Reconnect if we were connected
+  if (wasConnectedTransport && existingPortOrDevice) {
+    // Wait a short delay to let the OS release the USB interface
+    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      await connectPrinter(existingPortOrDevice);
+    } catch (e) {
+      console.error('Failed to auto-reconnect printer', e);
+    }
+  }
+}
+
 // Print Preview System
 
 
@@ -1652,7 +1689,7 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
 // Send to Printer from preview
 async function sendLinesToPrinter(lines: PrintLine[]) {
   if (activeTransport && activeTransport.type === 'browser') {
-    window.print();
+    await triggerBrowserPrint();
     return;
   }
   if (!activeTransport) throw new Error('Printer not connected! Please connect the printer first.');
@@ -1724,14 +1761,14 @@ printPreviewSend.addEventListener('click', async () => {
 });
 
 // Print using browser print dialog
-printPreviewBrowser.addEventListener('click', () => {
+printPreviewBrowser.addEventListener('click', async () => {
   const cardToUse = lastClickedCard || cards[0];
   const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
   const title = cardToUse[titleKey] || 'Untitled Item';
   
   try {
     // Open the browser print dialog
-    window.print();
+    await triggerBrowserPrint();
     
     // Log the print action
     addHistoryLog(cardToUse.id, title, 'success');
@@ -2041,7 +2078,7 @@ printAllUnprintedBtn.addEventListener('click', async () => {
       await new Promise(r => setTimeout(r, 100));
       
       // 2. Trigger browser print
-      window.print();
+      await triggerBrowserPrint();
       
       // 3. Mark all as printed and add to history
       for (const card of unprintedCards) {
