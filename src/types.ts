@@ -13,7 +13,7 @@ export interface PrintLine {
   isSeparator?: boolean;
   isImage?: boolean;
   imageUrl?: string;
-  rasterData?: Uint8Array;
+  rasterData?: Uint8Array[];
   gamma?: number;
   isQr?: boolean;
   isBarcode?: boolean;

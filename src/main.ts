@@ -1529,11 +1529,16 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
     img.crossOrigin = "Anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = url;
+    if (url.startsWith('http')) {
+      const cacheBuster = `cb=${Date.now()}`;
+      img.src = url.includes('?') ? `${url}&${cacheBuster}` : `${url}?${cacheBuster}`;
+    } else {
+      img.src = url;
+    }
   });
 }
 
-async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<Uint8Array | null> {
+async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<Uint8Array[] | null> {
   try {
     const normalizedUrl = normalizeImageUrl(url);
     let img: HTMLImageElement;
@@ -1606,29 +1611,38 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
       }
     }
 
-    const xL = (paddedWidth / 8) % 256;
-    const xH = Math.floor((paddedWidth / 8) / 256);
-    const yL = height % 256;
-    const yH = Math.floor(height / 256);
+    const chunkHeight = 24;
+    const strips: Uint8Array[] = [];
+    
+    for (let startY = 0; startY < height; startY += chunkHeight) {
+      const currentHeight = Math.min(chunkHeight, height - startY);
+      
+      const xL = (paddedWidth / 8) % 256;
+      const xH = Math.floor((paddedWidth / 8) / 256);
+      const yL = currentHeight % 256;
+      const yH = Math.floor(currentHeight / 256);
 
-    const data = new Uint8Array(8 + (paddedWidth / 8) * height);
-    data[0] = 0x1D; data[1] = 0x76; data[2] = 0x30; data[3] = 0x00;
-    data[4] = xL; data[5] = xH; data[6] = yL; data[7] = yH;
+      const stripData = new Uint8Array(8 + (paddedWidth / 8) * currentHeight);
+      stripData[0] = 0x1D; stripData[1] = 0x76; stripData[2] = 0x30; stripData[3] = 0x00;
+      stripData[4] = xL; stripData[5] = xH; stripData[6] = yL; stripData[7] = yH;
 
-    let idx = 8;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < paddedWidth; x += 8) {
-        let byte = 0;
-        for (let b = 0; b < 8; b++) {
-           if (gray[y * paddedWidth + x + b] < 128) { // black
-             byte |= (1 << (7 - b));
-           }
+      let idx = 8;
+      for (let y = 0; y < currentHeight; y++) {
+        const absoluteY = startY + y;
+        for (let x = 0; x < paddedWidth; x += 8) {
+          let byte = 0;
+          for (let b = 0; b < 8; b++) {
+             if (gray[absoluteY * paddedWidth + x + b] < 128) { // black
+               byte |= (1 << (7 - b));
+             }
+          }
+          stripData[idx++] = byte;
         }
-        data[idx++] = byte;
       }
+      strips.push(stripData);
     }
     
-    return data;
+    return strips;
   } catch (err) {
     console.error('Failed to convert image to raster', err);
     return null;

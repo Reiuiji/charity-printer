@@ -27,7 +27,11 @@ export async function sendLinesToPrinter(
         }
         const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
         await transport.write(new Uint8Array([ESC, 0x61, alignByte]));
-        await transport.write(line.rasterData);
+        for (const strip of line.rasterData) {
+          await transport.write(strip);
+          // Wait 25ms between strips to prevent buffer overflow on the printer
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
       } else {
         // Alignment
         const alignByte = line.align === 'center' ? 0x01 : line.align === 'right' ? 0x02 : 0x00;
