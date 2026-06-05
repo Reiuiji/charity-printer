@@ -1069,6 +1069,7 @@ const closePrintPreview = document.getElementById('close-print-preview') as HTML
 const receiptPaper = document.getElementById('receipt-paper') as HTMLDivElement;
 const printLinesControls = document.getElementById('print-lines-controls') as HTMLDivElement;
 const addPrintLineBtn = document.getElementById('add-print-line-btn') as HTMLButtonElement;
+const addImageBtn = document.getElementById('add-image-btn') as HTMLButtonElement;
 const addQrBtn = document.getElementById('add-qr-btn') as HTMLButtonElement;
 const addBarcodeBtn = document.getElementById('add-barcode-btn') as HTMLButtonElement;
 const addSeparatorBtn = document.getElementById('add-separator-btn') as HTMLButtonElement;
@@ -1270,15 +1271,23 @@ function renderPrintPreview() {
           topRow.appendChild(formatSelect);
         }
       } else {
-        const textSpan = document.createElement('span');
-        textSpan.textContent = `🖼️ Image: ${line.imageUrl?.split('/').pop() || 'Photo'}`;
-        textSpan.style.flex = '1';
-        textSpan.style.fontSize = '0.85rem';
-        textSpan.style.color = 'var(--primary-color)';
-        textSpan.style.overflow = 'hidden';
-        textSpan.style.textOverflow = 'ellipsis';
-        textSpan.style.whiteSpace = 'nowrap';
-        topRow.appendChild(textSpan);
+        const urlInput = document.createElement('input');
+        urlInput.type = 'text';
+        urlInput.value = line.imageUrl || '';
+        urlInput.placeholder = 'Image URL (e.g. https://... or {{Image}})';
+        urlInput.style.flex = '1';
+        
+        let typingTimer: any;
+        urlInput.addEventListener('input', () => {
+          printLines[index].imageUrl = urlInput.value;
+          delete printLines[index].rasterData;
+          clearTimeout(typingTimer);
+          typingTimer = setTimeout(() => {
+            updateReceiptPaper();
+            savePrintTemplate();
+          }, 300);
+        });
+        topRow.appendChild(urlInput);
 
         const sliderWrap = document.createElement('div');
         sliderWrap.style.display = 'flex';
@@ -1484,6 +1493,11 @@ addPrintLineBtn.addEventListener('click', () => {
   renderPrintPreview();
 });
 
+addImageBtn.addEventListener('click', () => {
+  printLines.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: '', gamma: 1.0 });
+  renderPrintPreview();
+});
+
 addQrBtn.addEventListener('click', async () => {
   const line: PrintLine = { enabled: true, text: 'QRCODE', bold: false, align: 'center', size: 'normal', isImage: true, isQr: true, gamma: 1.0 };
   printLines.push(line);
@@ -1667,8 +1681,6 @@ printPreviewSend.addEventListener('click', async () => {
       addHistoryLog(cardToUse.id, title, 'error', e.message);
       throw e;
     }
-    closePrintPreviewModal();
-
     if (currentEditId) {
       let printedIds: string[] = [];
       try {
@@ -1687,6 +1699,7 @@ printPreviewSend.addEventListener('click', async () => {
         btn.classList.add('printed');
       }
     }
+    closePrintPreviewModal();
   } catch (err: any) {
     if (err.message !== 'Printer not connected! Please connect the printer first.') {
       console.error('Print failed', err);
