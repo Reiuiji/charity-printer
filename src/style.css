@@ -661,11 +661,11 @@ body.light-theme select option {
 }
 
 .receipt-paper {
-  width: 280px;
+  width: var(--paper-width, 280px);
   background: #fff;
   color: #111;
   font-family: 'Courier New', Courier, monospace;
-  font-size: 13px;
+  font-size: var(--paper-font-size, 13px);
   line-height: 1.4;
   padding: 20px 16px 20px 16px;
   border-radius: 4px 4px 0 0;
@@ -703,10 +703,10 @@ body.light-theme select option {
 .receipt-line.align-center { text-align: center; }
 .receipt-line.align-right { text-align: right; }
 .receipt-line.bold { font-weight: 700; }
-.receipt-line.size-xl { font-size: 28px; line-height: 1.1; }
-.receipt-line.size-large { font-size: 20px; }
-.receipt-line.size-small { font-size: 11px; }
-.receipt-line.size-xs { font-size: 9px; line-height: 1.2; }
+.receipt-line.size-xl { font-size: 2.15em; line-height: 1.1; }
+.receipt-line.size-large { font-size: 1.54em; }
+.receipt-line.size-small { font-size: 0.85em; }
+.receipt-line.size-xs { font-size: 0.69em; line-height: 1.2; }
 .receipt-line.separator {
   text-align: center;
   letter-spacing: 2px;
@@ -924,4 +924,85 @@ body.read-only-mode .print-controls {
 
 body.read-only-mode .print-controls .modal-actions {
   justify-content: center;
+}
+
+/* Print Stylesheet for Browser Printing */
+@media print {
+  @page {
+    margin: 0;
+  }
+  
+  /* Hide all elements on the page by default */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only the print preview modal backdrop */
+  #print-preview-modal,
+  #print-preview-modal * {
+    visibility: visible;
+  }
+  
+  /* Position the print preview modal to occupy the whole page without styling */
+  #print-preview-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  
+  #print-preview-modal .modal-content {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: none !important;
+  }
+  
+  /* Hide close button, header and editing panels in the printout */
+  #print-preview-modal h2,
+  #close-print-preview,
+  .print-controls,
+  .modal-actions {
+    display: none !important;
+  }
+  
+  /* Center and align the receipt wrapper */
+  .print-preview-layout {
+    display: block !important;
+  }
+  
+  .receipt-paper-wrap {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    display: block !important;
+  }
+  
+  .receipt-paper {
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    filter: none !important;
+  }
+  
+  .receipt-paper::after {
+    display: none !important; /* Hide the serrated bottom cut visual indicator in print */
+  }
 }

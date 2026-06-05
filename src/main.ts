@@ -10,7 +10,8 @@ import type { PrinterTransport } from './transport';
 import { 
   SerialPrinterTransport, 
   UsbPrinterTransport, 
-  NetworkPrinterTransport 
+  NetworkPrinterTransport,
+  BrowserPrinterTransport
 } from './transport';
 
 // Global state
@@ -78,6 +79,9 @@ const feedLinesInput = document.getElementById('feed-lines-input') as HTMLInputE
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
 const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanElement;
+const browserPrintSettings = document.getElementById('browser-print-settings') as HTMLDivElement;
+const browserPaperSize = document.getElementById('browser-paper-size') as HTMLSelectElement;
+const browserPrintScale = document.getElementById('browser-print-scale') as HTMLSelectElement;
 
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
@@ -167,6 +171,18 @@ function updateMainStatuses() {
   }
 }
 
+function applyBrowserPrintSettings() {
+  const paperSize = localStorage.getItem('browser-paper-size') || '80mm';
+  const scale = localStorage.getItem('browser-print-scale') || '100%';
+  
+  const width = paperSize === '58mm' ? '200px' : '280px';
+  const baseFontSize = 13 * (parseFloat(scale) / 100);
+  
+  const root = document.documentElement;
+  root.style.setProperty('--paper-width', width);
+  root.style.setProperty('--paper-font-size', baseFontSize + 'px');
+}
+
 // Initialization
 function init() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -242,6 +258,22 @@ function init() {
     document.body.classList.add('read-only-mode');
   }
 
+  // Load and apply browser print settings
+  const savedPaperSize = localStorage.getItem('browser-paper-size') || '80mm';
+  browserPaperSize.value = savedPaperSize;
+  const savedPrintScale = localStorage.getItem('browser-print-scale') || '100%';
+  browserPrintScale.value = savedPrintScale;
+  applyBrowserPrintSettings();
+
+  browserPaperSize.addEventListener('change', () => {
+    localStorage.setItem('browser-paper-size', browserPaperSize.value);
+    applyBrowserPrintSettings();
+  });
+  browserPrintScale.addEventListener('change', () => {
+    localStorage.setItem('browser-print-scale', browserPrintScale.value);
+    applyBrowserPrintSettings();
+  });
+
   // Load Profiles and History
   const savedProfiles = localStorage.getItem('template-profiles');
   if (savedProfiles) {
@@ -272,12 +304,18 @@ function init() {
     if (val === 'network') {
       networkIpInput.classList.remove('hidden');
       connectionDescription.textContent = 'Connect via local Wi-Fi or LAN. Enter the raw WebSocket IP and Port of your thermal printer.';
+      browserPrintSettings.classList.add('hidden');
     } else {
       networkIpInput.classList.add('hidden');
       if (val === 'serial') {
         connectionDescription.textContent = 'Connect to a virtual COM port. Supported in Chrome and Edge.';
+        browserPrintSettings.classList.add('hidden');
       } else if (val === 'usb') {
         connectionDescription.textContent = 'Connect directly to raw USB bulk endpoints. Bypasses the need for OS-level serial drivers.';
+        browserPrintSettings.classList.add('hidden');
+      } else if (val === 'browser') {
+        connectionDescription.textContent = 'Print using standard Chrome print dialog. Works on any OS without drivers or permissions.';
+        browserPrintSettings.classList.remove('hidden');
       }
     }
   }
@@ -316,6 +354,8 @@ function init() {
       if (devices.length > 0) {
         await connectPrinter(devices[0]);
       }
+    } else if (savedType === 'browser') {
+      await connectPrinter();
     }
   }, 100);
 }
@@ -972,6 +1012,8 @@ async function connectPrinter(existingDevice?: any) {
       if (!ip) throw new Error('Please enter a valid WebSocket IP (e.g. ws://192.168.1.100:9100)');
       localStorage.setItem('last-network-ip', ip);
       activeTransport = new NetworkPrinterTransport(ip);
+    } else if (type === 'browser') {
+      activeTransport = new BrowserPrinterTransport();
     }
 
     connectPrinterBtn.textContent = 'Connecting...';
@@ -996,7 +1038,16 @@ async function connectPrinter(existingDevice?: any) {
 
   } catch (err: any) {
     console.error(err);
-    alert('Failed to connect to printer: ' + err.message);
+    let msg = err.message;
+    if (msg.includes("Access denied") || msg.includes("SecurityError")) {
+      const isWindows = /win/i.test(navigator.userAgent || navigator.platform || "");
+      if (isWindows) {
+        msg += "\n\nTip: On Windows, this is usually because the default printer driver has claimed the device. You must use Zadig (https://zadig.akeo.ie) to replace the printer driver with 'WinUSB'. Alternatively, try using the 'Serial' connection type which often works out of the box.";
+      } else {
+        msg += "\n\nTip: On Linux, this is usually a permission issue. If using USB, you may need a udev rule (run `./setup-udev-rules.sh`). If using Serial, ensure your user is in the 'dialout' or 'uucp' group.";
+      }
+    }
+    alert('Failed to connect to printer: ' + msg);
     printerStatus.textContent = 'Disconnected';
     printerStatus.className = 'status disconnected';
     printerStatusText.textContent = 'Disconnected';
@@ -1023,6 +1074,7 @@ const addBarcodeBtn = document.getElementById('add-barcode-btn') as HTMLButtonEl
 const addSeparatorBtn = document.getElementById('add-separator-btn') as HTMLButtonElement;
 const printPreviewCancel = document.getElementById('print-preview-cancel') as HTMLButtonElement;
 const printPreviewSend = document.getElementById('print-preview-send') as HTMLButtonElement;
+const printPreviewBrowser = document.getElementById('print-preview-browser') as HTMLButtonElement;
 const templateVariablesPanel = document.getElementById('template-variables-panel') as HTMLDivElement;
 const templateVariablesList = document.getElementById('template-variables-list') as HTMLDivElement;
 
@@ -1048,6 +1100,7 @@ async function openPrintPreview(id: string) {
   currentEditId = id;
   isTemplateMode = false;
   printPreviewSend.textContent = '🖨️ Print';
+  printPreviewBrowser.classList.remove('hidden');
   templateVariablesPanel.classList.add('hidden');
   importTemplateBtn.classList.add('hidden');
   exportTemplateBtn.classList.add('hidden');
@@ -1569,6 +1622,10 @@ async function convertImageToRaster(url: string, gamma: number = 1.0): Promise<U
 
 // Send to Printer from preview
 async function sendLinesToPrinter(lines: PrintLine[]) {
+  if (activeTransport && activeTransport.type === 'browser') {
+    window.print();
+    return;
+  }
   if (!activeTransport) throw new Error('Printer not connected! Please connect the printer first.');
   const feedLines = parseInt(feedLinesInput.value, 10) || 4;
 
@@ -1635,6 +1692,46 @@ printPreviewSend.addEventListener('click', async () => {
       console.error('Print failed', err);
     }
     alert(err.message);
+  }
+});
+
+// Print using browser print dialog
+printPreviewBrowser.addEventListener('click', () => {
+  const cardToUse = lastClickedCard || cards[0];
+  const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
+  const title = cardToUse[titleKey] || 'Untitled Item';
+  
+  try {
+    // Open the browser print dialog
+    window.print();
+    
+    // Log the print action
+    addHistoryLog(cardToUse.id, title, 'success');
+    
+    // Mark as printed
+    if (currentEditId) {
+      let printedIds: string[] = [];
+      try {
+        const saved = localStorage.getItem('printed-items');
+        if (saved) printedIds = JSON.parse(saved);
+      } catch(e) {}
+      
+      if (!printedIds.includes(currentEditId)) {
+        printedIds.push(currentEditId);
+        localStorage.setItem('printed-items', JSON.stringify(printedIds));
+      }
+
+      const btn = document.querySelector(`.print-item-btn[data-id="${currentEditId}"]`) as HTMLButtonElement;
+      if (btn) {
+        btn.textContent = '✅ Printed';
+        btn.classList.add('printed');
+      }
+    }
+    
+    closePrintPreviewModal();
+  } catch (err: any) {
+    console.error('Browser print failed', err);
+    alert('Browser print failed: ' + err.message);
   }
 });
 
@@ -1778,6 +1875,7 @@ editTemplateBtn.addEventListener('click', async () => {
   }
   isTemplateMode = true;
   printPreviewSend.textContent = '💾 Save Template';
+  printPreviewBrowser.classList.add('hidden');
   
   const sampleCard = lastClickedCard || cards[0];
   const profile = templateProfiles[activeTemplateId];
@@ -1842,6 +1940,100 @@ printAllUnprintedBtn.addEventListener('click', async () => {
   const unprintedCards = cards.filter(c => !printedIds.has(c.id));
   if (unprintedCards.length === 0) {
     alert('No unprinted items found.');
+    return;
+  }
+
+  if (activeTransport.type === 'browser') {
+    // Bulk print via Browser dialog (all in one print job!)
+    if (!confirm(`Are you sure you want to open the browser print dialog for all ${unprintedCards.length} unprinted items?`)) {
+      return;
+    }
+    const originalText = printAllUnprintedBtn.textContent;
+    printAllUnprintedBtn.textContent = 'Preparing Print...';
+    printAllUnprintedBtn.disabled = true;
+
+    try {
+      // 1. Render all cards into the receiptPaper container temporarily
+      receiptPaper.innerHTML = '';
+      
+      for (let i = 0; i < unprintedCards.length; i++) {
+        const card = unprintedCards[i];
+        const lines = await getPrintLinesForCard(card);
+        
+        // Create a wrapper for this specific card
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'bulk-print-item';
+        if (i < unprintedCards.length - 1) {
+          cardContainer.style.setProperty('page-break-after', 'always');
+          cardContainer.style.setProperty('break-after', 'page');
+        }
+        
+        // Render lines into the wrapper
+        for (let j = 0; j < lines.length; j++) {
+          const line = lines[j];
+          if (!line.enabled) continue;
+          if (line.isImage && line.imageUrl) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'receipt-line';
+            if (line.align === 'center') imgWrap.classList.add('align-center');
+            if (line.align === 'right') imgWrap.classList.add('align-right');
+            const img = document.createElement('img');
+            img.src = line.imageUrl;
+            img.style.maxWidth = '100%';
+            img.style.display = 'inline-block';
+            img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`;
+            imgWrap.appendChild(img);
+            cardContainer.appendChild(imgWrap);
+          } else {
+            const div = document.createElement('div');
+            div.className = 'receipt-line';
+            if (line.align === 'center') div.classList.add('align-center');
+            if (line.align === 'right') div.classList.add('align-right');
+            if (line.bold) div.classList.add('bold');
+            if (line.size) div.classList.add('size-' + line.size);
+            if (line.isSeparator) {
+              div.classList.add('separator');
+              div.textContent = '- - - - - - - - - - - - - - - -';
+            } else {
+              div.textContent = line.text;
+            }
+            cardContainer.appendChild(div);
+          }
+        }
+        
+        receiptPaper.appendChild(cardContainer);
+      }
+      
+      // Open the print preview modal backdrop so the @media print styles apply
+      currentEditId = null;
+      isTemplateMode = false;
+      printPreviewModal.classList.remove('hidden');
+      
+      // Wait a frame for DOM to update
+      await new Promise(r => setTimeout(r, 100));
+      
+      // 2. Trigger browser print
+      window.print();
+      
+      // 3. Mark all as printed and add to history
+      for (const card of unprintedCards) {
+        const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
+        const title = card[titleKey] || 'Untitled Item';
+        addHistoryLog(card.id, title, 'success');
+        printedIds.add(card.id);
+      }
+      localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+      
+      // 4. Close the modal
+      closePrintPreviewModal();
+      
+    } catch (err: any) {
+      alert('Bulk print error: ' + err.message);
+    } finally {
+      printAllUnprintedBtn.textContent = originalText;
+      printAllUnprintedBtn.disabled = false;
+      renderCards(searchInput.value);
+    }
     return;
   }
   

@@ -102,3 +102,10 @@ export class NetworkPrinterTransport implements PrinterTransport {
     this.socket.send(data as unknown as Blob);
   }
 }
+
+export class BrowserPrinterTransport implements PrinterTransport {
+  type = 'browser';
+  async connect() {}
+  async disconnect() {}
+  async write(_data: Uint8Array) {}
+}

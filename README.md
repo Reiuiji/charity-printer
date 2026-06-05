@@ -78,3 +78,42 @@ The codebase is highly modularized for maintainability:
 
 ## 🌐 Deployment
 This app can be hosted completely for free on static hosting providers like GitHub Pages or Vercel. A GitHub Actions workflow (`.github/workflows/deploy.yml`) is already included. Simply push the repository to GitHub, enable GitHub Actions, and it will automatically deploy the site for you.
+
+## 🔧 Troubleshooting Printer Connection
+
+### Linux "Access Denied" (WebUSB / Web Serial)
+By default, Linux limits access to raw USB and serial devices to the `root` user or specific system groups.
+
+#### 1. For USB (WebUSB)
+If you get `Failed to execute 'open' on 'USBDevice': Access denied`, run the included configuration script in the root of the project to create a udev rule:
+```bash
+./setup-udev-rules.sh
+```
+Follow the prompts (Option 1 is recommended to authorize all USB printers). Once completed, unplug your printer's USB cable and plug it back in to apply the rules.
+
+#### 2. For Serial (Web Serial)
+If you select **Serial** connection type and get access denied when opening the port, ensure your user has access to serial ports. On Fedora/Bazzite/Ubuntu:
+- Add your user to the `dialout` group (and/or `uucp` on Arch-based distros):
+  ```bash
+  sudo usermod -aG dialout $USER
+  ```
+- **Important**: You must log out of your desktop session and log back in (or reboot) for this group change to take effect.
+
+### Windows 11 "Access Denied" (WebUSB)
+On Windows, the operating system automatically claims thermal printers using a default driver (`usbprint.sys`), which blocks the browser from directly opening raw USB interfaces.
+
+#### 1. Recommended: Use "Serial" connection type
+Many USB receipt printers actually present themselves as virtual COM serial ports (usually using a CH340 or similar chip). 
+- In the connection settings, select **Serial**.
+- Click **Connect Printer** and select the port from the browser list (typically labeled `USB Serial Device` or `COM3`, `COM4`, etc.). This method does **not** require any driver modifications on Windows.
+
+#### 2. Using WebUSB with Zadig (Advanced)
+If you must use **USB** connection type, you need to replace the printer's driver with the generic Microsoft `WinUSB` driver so Chrome can access it:
+1. Download **Zadig** from [zadig.akeo.ie](https://zadig.akeo.ie/).
+2. Run Zadig, go to the top menu, select **Options** > check **List All Devices**.
+3. In the main dropdown menu, select your thermal printer (e.g. `POS-58` or `USB Printing Support`).
+4. In the target driver box (the right side of the green arrow), select **WinUSB**.
+5. Click **Replace Driver** or **Reinstall Driver** and wait for it to finish.
+6. Refresh the page and try connecting again.
+*(Note: Doing this will make the printer inaccessible to standard Windows printer drivers/spoolers unless you revert the driver in Device Manager).*
+```,StartLine:79,TargetContent:

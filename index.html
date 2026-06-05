@@ -105,6 +105,7 @@
                 <option value="serial" style="color: #000;">Serial</option>
                 <option value="usb" style="color: #000;">USB</option>
                 <option value="network" style="color: #000;">Network / Wi-Fi</option>
+                <option value="browser" style="color: #000;">Browser Print (No Driver Required)</option>
               </select>
               
               <div id="connection-description" style="font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.1); padding: 8px; border-radius: 4px; border-left: 3px solid var(--primary-color);">
@@ -125,6 +126,28 @@
               <div style="display: flex; gap: 10px; align-items: center;">
                 <input type="number" id="feed-lines-input" value="4" min="0" max="10" class="form-input" style="width: 80px; padding: 8px; border-radius: 6px; border: 1px solid var(--glass-border); outline: none;" />
                 <span style="font-size: 0.8rem; color: var(--text-muted);">Empty lines fed so the paper tears perfectly</span>
+              </div>
+            </div>
+
+            <div id="browser-print-settings" class="hidden" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+              <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 0.95rem; color: var(--text-main);">📄 Browser Print Options</h4>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label for="browser-paper-size" style="font-size: 0.85rem; color: var(--text-muted);">Paper Width</label>
+                  <select id="browser-paper-size" class="form-input" style="padding: 6px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border);">
+                    <option value="80mm" selected style="color: #000;">80mm (Standard)</option>
+                    <option value="58mm" style="color: #000;">58mm (Narrow)</option>
+                  </select>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label for="browser-print-scale" style="font-size: 0.85rem; color: var(--text-muted);">Print Scale</label>
+                  <select id="browser-print-scale" class="form-input" style="padding: 6px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border);">
+                    <option value="90%" style="color: #000;">90% (Tight)</option>
+                    <option value="100%" selected style="color: #000;">100% (Normal)</option>
+                    <option value="110%" style="color: #000;">110% (Large)</option>
+                    <option value="120%" style="color: #000;">120% (Extra Large)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -293,6 +316,7 @@
             <input type="file" id="import-template-file" style="display: none;" accept=".json" />
             <button type="button" class="btn secondary-btn hidden" id="import-template-btn">📂 Import</button>
             <button type="button" class="btn secondary-btn hidden" id="export-template-btn">💾 Export</button>
+            <button type="button" class="btn secondary-btn" id="print-preview-browser">🖨️ Browser Print</button>
             <button type="button" class="btn secondary-btn" id="print-preview-cancel">Cancel</button>
             <button type="button" class="btn print-btn" id="print-preview-send">🖨️ Send to Printer</button>
           </div>
