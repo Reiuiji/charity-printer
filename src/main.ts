@@ -226,12 +226,19 @@ function applyGridColumns() {
   if (gridColumnsSelect) {
     gridColumnsSelect.value = cols;
   }
+  
+  const isFullWidth = localStorage.getItem('full-width') === 'true';
+  if (gridColumnsSelect) {
+    gridColumnsSelect.disabled = !isFullWidth;
+  }
+
   const cardsContainer = document.getElementById('cards-container');
   if (!cardsContainer) return;
-  if (cols === 'auto') {
-    cardsContainer.style.removeProperty('--grid-columns');
-  } else {
+
+  if (isFullWidth && cols !== 'auto') {
     cardsContainer.style.setProperty('--grid-columns', `repeat(${cols}, 1fr)`);
+  } else {
+    cardsContainer.style.removeProperty('--grid-columns');
   }
 }
 
@@ -2644,6 +2651,7 @@ fullWidthToggle.addEventListener('change', () => {
   } else {
     appElement.classList.remove('full-width');
   }
+  applyGridColumns();
 });
 
 createCustomReceiptBtn.addEventListener('click', () => {
