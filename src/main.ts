@@ -2508,7 +2508,7 @@ function renderPrintPreview() {
             renderPrintPreview();
           }));
 
-          const sizes: Array<'xs' | 'small' | 'normal' | 'large' | 'xl'> = ['xs', 'small', 'normal', 'large', 'xl'];
+          const sizes: Array<'xs' | 'small' | 'normal' | 'large' | 'xl'> = ['xl', 'large', 'normal', 'small', 'xs'];
           sizes.forEach(sz => {
             subOptionsRow.appendChild(makeSubBtn(sz.toUpperCase(), subLine.size === sz, () => {
               subLine.size = sz;
