@@ -91,6 +91,8 @@ const cardPreviewFieldsContainer = document.getElementById('card-preview-fields-
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
 const readOnlyToggle = document.getElementById('read-only-toggle') as HTMLInputElement;
+const fullWidthToggle = document.getElementById('full-width-toggle') as HTMLInputElement;
+const appElement = document.getElementById('app') as HTMLDivElement;
 const customIdSettings = document.getElementById('custom-id-settings') as HTMLDivElement;
 const customIdPrefix = document.getElementById('custom-id-prefix') as HTMLInputElement;
 const customIdNext = document.getElementById('custom-id-next') as HTMLInputElement;
@@ -298,6 +300,12 @@ function init() {
   if (savedReadOnly === 'true') {
     readOnlyToggle.checked = true;
     document.body.classList.add('read-only-mode');
+  }
+
+  const savedFullWidth = localStorage.getItem('full-width');
+  if (savedFullWidth === 'true') {
+    if (fullWidthToggle) fullWidthToggle.checked = true;
+    if (appElement) appElement.classList.add('full-width');
   }
 
   // Load and apply browser print settings
@@ -2609,6 +2617,15 @@ readOnlyToggle.addEventListener('change', () => {
   }
 });
 
+fullWidthToggle.addEventListener('change', () => {
+  localStorage.setItem('full-width', fullWidthToggle.checked.toString());
+  if (fullWidthToggle.checked) {
+    appElement.classList.add('full-width');
+  } else {
+    appElement.classList.remove('full-width');
+  }
+});
+
 createCustomReceiptBtn.addEventListener('click', () => {
   const prefix = customIdPrefix.value || 'CUSTOM-';
   const nextNumStr = customIdNext.value || '1000';
@@ -2739,6 +2756,7 @@ exportAppBackupBtn.addEventListener('click', () => {
     'last-network-ip': localStorage.getItem('last-network-ip'),
     'card-preview-fields': localStorage.getItem('card-preview-fields'),
     'card-preview-fields-order': localStorage.getItem('card-preview-fields-order'),
+    'full-width': localStorage.getItem('full-width'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));

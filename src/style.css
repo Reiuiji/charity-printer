@@ -47,6 +47,10 @@ body {
   min-height: calc(100vh - 40px);
 }
 
+#app.full-width {
+  max-width: 100%;
+}
+
 /* Glassmorphism utilities */
 .glass-header, .glass-panel {
   background: var(--glass-bg);
