@@ -1140,8 +1140,37 @@ async function printAuctionList() {
   lines.push({ enabled: true, text: 'AUCTION ITEMS ORDER', bold: true, align: 'center', size: 'large' });
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
 
-  // Add the single Loop Line representing all items
+  // Dynamically generate the default header text from loop variables
   const loopPattern = getDefaultAuctionLoopPattern();
+  const varRegex = /{{\s*([^}]+)\s*}}/g;
+  const variables: string[] = [];
+  let match;
+  while ((match = varRegex.exec(loopPattern)) !== null) {
+    variables.push(match[1].trim());
+  }
+
+  const currentSchema = schemaProfiles[activeSchemaId];
+  const headers = variables.map(v => {
+    if (currentSchema && currentSchema.mapping[v]) {
+      return shortLabel(currentSchema.mapping[v]);
+    }
+    return shortLabel(v);
+  });
+
+  let headerText = '';
+  if (headers.length === 3) {
+    headerText = formatAuctionColumns(headers[0], headers[1], headers[2], totalWidth);
+  } else if (headers.length === 2) {
+    headerText = formatTwoColumns(headers[0], headers[1], totalWidth);
+  } else {
+    headerText = headers.join(' | ');
+  }
+
+  // Push the editable header line and separator
+  lines.push({ enabled: true, text: headerText, bold: true, align: 'left', size: 'normal' });
+  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
+
+  // Add the Loop Group representing all items
   lines.push({
     enabled: true,
     text: 'Auction Loop Group',
@@ -1872,52 +1901,7 @@ async function expandPrintLines(lines: PrintLine[]): Promise<PrintLine[]> {
     if (line.isLoop) {
       const subLines = line.subLines || [];
 
-      // 1. Find the first sub-line with a pipe symbol to generate the table header dynamically
-      const tableSubLine = subLines.find(sl => sl.enabled && sl.text.includes('|') && sl.text.includes('{{'));
-      if (tableSubLine) {
-        const varRegex = /{{\s*([^}]+)\s*}}/g;
-        const variables: string[] = [];
-        let match;
-        while ((match = varRegex.exec(tableSubLine.text)) !== null) {
-          variables.push(match[1].trim());
-        }
-
-        const headers = variables.map(v => {
-          if (currentSchema && currentSchema.mapping[v]) {
-            return shortLabel(currentSchema.mapping[v]);
-          }
-          return shortLabel(v);
-        });
-
-        let headerText = '';
-        if (headers.length === 3) {
-          headerText = formatAuctionColumns(headers[0], headers[1], headers[2], totalWidth);
-        } else if (headers.length === 2) {
-          headerText = formatTwoColumns(headers[0], headers[1], totalWidth);
-        } else {
-          headerText = headers.join(' | ');
-        }
-
-        if (headerText) {
-          expanded.push({
-            enabled: true,
-            text: headerText,
-            bold: true,
-            align: 'left',
-            size: 'normal'
-          });
-          expanded.push({
-            enabled: true,
-            text: '-'.repeat(totalWidth),
-            bold: false,
-            align: 'center',
-            size: 'normal',
-            isSeparator: true
-          });
-        }
-      }
-
-      // 2. Loop through all cards
+      // Loop through all cards
       for (const card of cards) {
         for (const subLine of subLines) {
           if (!subLine.enabled) continue;
