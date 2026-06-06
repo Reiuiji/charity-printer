@@ -1096,17 +1096,3 @@ body.read-only-mode .print-controls .modal-actions {
     display: block;
   }
 }
-
-/* Auction/Simple Print Preview Mode styling */
-.print-preview-layout.no-controls {
-  grid-template-columns: 1fr;
-  justify-content: center;
-}
-
-.print-preview-layout.no-controls .print-controls {
-  display: none !important;
-}
-
-.modal-print-preview.compact {
-  max-width: 450px;
-}

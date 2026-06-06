@@ -1084,11 +1084,6 @@ async function printAuctionList() {
 
   renderPrintPreview();
 
-  const modalContent = printPreviewModal.querySelector('.modal-content') as HTMLElement;
-  const previewLayout = printPreviewModal.querySelector('.print-preview-layout') as HTMLElement;
-  if (modalContent) modalContent.classList.add('compact');
-  if (previewLayout) previewLayout.classList.add('no-controls');
-
   printPreviewSend.textContent = '🖨️ Print List';
   printPreviewBrowser.classList.remove('hidden');
   templateVariablesPanel.classList.add('hidden');
@@ -1769,11 +1764,6 @@ function closePrintPreviewModal() {
   currentEditId = null;
   isTemplateMode = false;
   isAuctionPrint = false;
-
-  const modalContent = printPreviewModal.querySelector('.modal-content') as HTMLElement;
-  const previewLayout = printPreviewModal.querySelector('.print-preview-layout') as HTMLElement;
-  if (modalContent) modalContent.classList.remove('compact');
-  if (previewLayout) previewLayout.classList.remove('no-controls');
 }
 
 function updateReceiptPaper() {
