@@ -1166,10 +1166,6 @@ async function printAuctionList() {
     headerText = headers.join(' | ');
   }
 
-  // Push the editable header line and separator
-  lines.push({ enabled: true, text: headerText, bold: true, align: 'left', size: 'normal' });
-  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
-
   // Add the Loop Group representing all items
   lines.push({
     enabled: true,
@@ -1178,6 +1174,7 @@ async function printAuctionList() {
     align: 'left',
     size: 'normal',
     isLoop: true,
+    loopHeader: { enabled: true, text: headerText, bold: true, align: 'left', size: 'normal' },
     subLines: [
       { enabled: true, text: loopPattern, bold: false, align: 'left', size: 'normal' }
     ]
@@ -1899,6 +1896,19 @@ async function expandPrintLines(lines: PrintLine[]): Promise<PrintLine[]> {
     if (!line.enabled) continue;
 
     if (line.isLoop) {
+      if (line.loopHeader && line.loopHeader.enabled) {
+        expanded.push({
+          ...line.loopHeader
+        });
+        expanded.push({
+          enabled: true,
+          text: '-'.repeat(totalWidth),
+          bold: false,
+          align: 'center',
+          size: 'normal',
+          isSeparator: true
+        });
+      }
       const subLines = line.subLines || [];
 
       // Loop through all cards
@@ -2242,6 +2252,95 @@ function renderPrintPreview() {
         renderPrintPreview();
       });
       topRow.appendChild(removeBtn);
+
+      if (!line.loopHeader) {
+        line.loopHeader = { enabled: true, text: 'Num  Donor                  Price', bold: true, align: 'left', size: 'normal' };
+      }
+
+      const loopHeaderContainer = document.createElement('div');
+      loopHeaderContainer.style.background = 'rgba(255,255,255,0.03)';
+      loopHeaderContainer.style.border = '1px dashed rgba(255,255,255,0.08)';
+      loopHeaderContainer.style.borderRadius = '6px';
+      loopHeaderContainer.style.padding = '8px';
+      loopHeaderContainer.style.marginTop = '8px';
+      loopHeaderContainer.style.display = 'flex';
+      loopHeaderContainer.style.flexDirection = 'column';
+      loopHeaderContainer.style.gap = '6px';
+
+      const headerTopRow = document.createElement('div');
+      headerTopRow.className = 'print-line-top';
+
+      const headerLabel = document.createElement('span');
+      headerLabel.textContent = '📋 Header (Once):';
+      headerLabel.style.fontSize = '0.8rem';
+      headerLabel.style.color = '#10b981';
+      headerLabel.style.fontWeight = 'bold';
+      headerLabel.style.marginRight = '5px';
+
+      const headerCheckbox = document.createElement('input');
+      headerCheckbox.type = 'checkbox';
+      headerCheckbox.checked = line.loopHeader.enabled;
+      headerCheckbox.addEventListener('change', () => {
+        line.loopHeader!.enabled = headerCheckbox.checked;
+        updateReceiptPaper();
+      });
+
+      const headerTextInput = document.createElement('input');
+      headerTextInput.type = 'text';
+      headerTextInput.value = line.loopHeader.text;
+      headerTextInput.placeholder = 'e.g. Num  Donor  Price';
+      headerTextInput.style.flex = '1';
+      headerTextInput.addEventListener('input', () => {
+        line.loopHeader!.text = headerTextInput.value;
+        updateReceiptPaper();
+      });
+
+      headerTopRow.appendChild(headerLabel);
+      headerTopRow.appendChild(headerCheckbox);
+      headerTopRow.appendChild(headerTextInput);
+      loopHeaderContainer.appendChild(headerTopRow);
+
+      const headerOptionsRow = document.createElement('div');
+      headerOptionsRow.className = 'print-line-options';
+      headerOptionsRow.style.paddingLeft = '30px';
+
+      const makeHeaderBtn = (lbl: string, isActive: boolean, onClick: () => void) => {
+        const btn = document.createElement('button');
+        btn.textContent = lbl;
+        btn.type = 'button';
+        if (isActive) btn.classList.add('active');
+        btn.addEventListener('click', onClick);
+        return btn;
+      };
+
+      headerOptionsRow.appendChild(makeHeaderBtn('Bold', line.loopHeader.bold || false, () => {
+        line.loopHeader!.bold = !line.loopHeader!.bold;
+        renderPrintPreview();
+      }));
+
+      headerOptionsRow.appendChild(makeHeaderBtn('Left', line.loopHeader.align === 'left', () => {
+        line.loopHeader!.align = 'left';
+        renderPrintPreview();
+      }));
+      headerOptionsRow.appendChild(makeHeaderBtn('Center', line.loopHeader.align === 'center', () => {
+        line.loopHeader!.align = 'center';
+        renderPrintPreview();
+      }));
+      headerOptionsRow.appendChild(makeHeaderBtn('Right', line.loopHeader.align === 'right', () => {
+        line.loopHeader!.align = 'right';
+        renderPrintPreview();
+      }));
+
+      const headerSizes: Array<'xs' | 'small' | 'normal' | 'large' | 'xl'> = ['xl', 'large', 'normal', 'small', 'xs'];
+      headerSizes.forEach(sz => {
+        headerOptionsRow.appendChild(makeHeaderBtn(sz.toUpperCase(), line.loopHeader!.size === sz, () => {
+          line.loopHeader!.size = sz;
+          renderPrintPreview();
+        }));
+      });
+
+      loopHeaderContainer.appendChild(headerOptionsRow);
+      control.appendChild(loopHeaderContainer);
 
       if (!line.subLines) {
         line.subLines = [];

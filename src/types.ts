@@ -20,6 +20,7 @@ export interface PrintLine {
   barcodeFormat?: string;
   isLoop?: boolean;
   subLines?: PrintLine[];
+  loopHeader?: PrintLine;
 }
 
 export interface TemplateProfile {
