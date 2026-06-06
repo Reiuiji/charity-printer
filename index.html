@@ -259,35 +259,6 @@
 
           <hr>
 
-          <!-- Auction Print Customization -->
-          <div class="settings-section">
-            <h3 style="margin-bottom: 10px;">🏷️ Auction List Columns</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
-              Select which CSV columns correspond to each column of the printed auction list.
-            </p>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-              <div style="flex: 1; min-width: 120px; display: flex; flex-direction: column; gap: 5px;">
-                <label for="auction-col1-select" style="font-size: 0.85rem; color: var(--text-muted);">Column 1 (Left):</label>
-                <select id="auction-col1-select" class="form-input" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
-                  <option value="" style="color: #000;">No data loaded</option>
-                </select>
-              </div>
-              <div style="flex: 2; min-width: 180px; display: flex; flex-direction: column; gap: 5px;">
-                <label for="auction-col2-select" style="font-size: 0.85rem; color: var(--text-muted);">Column 2 (Center):</label>
-                <select id="auction-col2-select" class="form-input" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
-                  <option value="" style="color: #000;">No data loaded</option>
-                </select>
-              </div>
-              <div style="flex: 1; min-width: 120px; display: flex; flex-direction: column; gap: 5px;">
-                <label for="auction-col3-select" style="font-size: 0.85rem; color: var(--text-muted);">Column 3 (Right):</label>
-                <select id="auction-col3-select" class="form-input" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
-                  <option value="" style="color: #000;">No data loaded</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <hr>
 
           <!-- Automation -->
           <div class="settings-section">
@@ -396,8 +367,12 @@
             <div class="print-controls">
               <div id="print-edit-controls-wrapper">
                 <div id="template-variables-panel" class="hidden" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                  <h3 style="margin-top: 0; font-size: 0.9rem; color: #fbbf24;">Available Variables (Click to copy)</h3>
-                  <div id="template-variables-list" style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; max-height: 120px; overflow-y: auto;"></div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h3 style="margin: 0; font-size: 0.9rem; color: #fbbf24;">Available Variables (Click to copy)</h3>
+                    <button type="button" id="toggle-inline-schema-btn" class="btn secondary-btn" style="padding: 2px 8px; font-size: 0.75rem;">⚙️ Edit Mappings</button>
+                  </div>
+                  <div id="template-variables-list" style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; max-height: 120px; overflow-y: auto; margin-bottom: 10px;"></div>
+                  <div id="inline-schema-editor" class="hidden" style="border-top: 1px solid var(--glass-border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
                 <h3>Receipt Lines</h3>
                 <div id="print-lines-controls"></div>

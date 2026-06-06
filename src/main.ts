@@ -108,9 +108,6 @@ const batchActionsBar = document.getElementById('batch-actions-bar') as HTMLDivE
 const auctionModeBar = document.getElementById('auction-mode-bar') as HTMLDivElement;
 const auctionResetBtn = document.getElementById('auction-reset-btn') as HTMLButtonElement;
 const auctionPrintBtn = document.getElementById('auction-print-btn') as HTMLButtonElement;
-const auctionCol1Select = document.getElementById('auction-col1-select') as HTMLSelectElement;
-const auctionCol2Select = document.getElementById('auction-col2-select') as HTMLSelectElement;
-const auctionCol3Select = document.getElementById('auction-col3-select') as HTMLSelectElement;
 const selectedCount = document.getElementById('selected-count') as HTMLSpanElement;
 const batchSelectAllBtn = document.getElementById('batch-select-all-btn') as HTMLButtonElement;
 const batchClearBtn = document.getElementById('batch-clear-btn') as HTMLButtonElement;
@@ -313,7 +310,6 @@ function init() {
   
   renderSchemaMapper();
   renderCardPreviewFieldsSettings();
-  renderAuctionColumnsSettings();
   initDragAndDrop();
   initCardDragAndDrop();
 
@@ -513,7 +509,6 @@ async function fetchData() {
         renderCards();
         renderSchemaMapper();
         renderCardPreviewFieldsSettings();
-        renderAuctionColumnsSettings();
         
         const now = new Date().toISOString();
         localStorage.setItem('last-sync', now);
@@ -770,87 +765,202 @@ function renderCardPreviewFieldsSettings() {
   });
 }
 
-function renderAuctionColumnsSettings() {
-  if (!auctionCol1Select || !auctionCol2Select || !auctionCol3Select) return;
-
-  auctionCol1Select.innerHTML = '';
-  auctionCol2Select.innerHTML = '';
-  auctionCol3Select.innerHTML = '';
-
+function renderInlineSchemaEditor() {
+  if (!inlineSchemaEditor) return;
+  inlineSchemaEditor.innerHTML = '';
+  
   if (cards.length === 0) {
-    const opt1 = document.createElement('option');
-    opt1.textContent = 'No data loaded';
-    opt1.value = '';
-    opt1.style.color = '#000';
-    auctionCol1Select.appendChild(opt1);
-
-    const opt2 = document.createElement('option');
-    opt2.textContent = 'No data loaded';
-    opt2.value = '';
-    opt2.style.color = '#000';
-    auctionCol2Select.appendChild(opt2);
-
-    const opt3 = document.createElement('option');
-    opt3.textContent = 'No data loaded';
-    opt3.value = '';
-    opt3.style.color = '#000';
-    auctionCol3Select.appendChild(opt3);
-
-    auctionCol1Select.disabled = true;
-    auctionCol2Select.disabled = true;
-    auctionCol3Select.disabled = true;
+    inlineSchemaEditor.innerHTML = '<em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure mapping.</em>';
     return;
   }
+  
+  const csvHeaders = Object.keys(cards[0]);
+  const currentProfile = schemaProfiles[activeSchemaId];
+  if (!currentProfile) return;
+  
+  const headerDiv = document.createElement('div');
+  headerDiv.style.fontSize = '0.8rem';
+  headerDiv.style.fontWeight = 'bold';
+  headerDiv.style.color = 'var(--text-muted)';
+  headerDiv.style.marginBottom = '5px';
+  headerDiv.textContent = 'Map CSV columns to Variable tags:';
+  inlineSchemaEditor.appendChild(headerDiv);
 
-  auctionCol1Select.disabled = false;
-  auctionCol2Select.disabled = false;
-  auctionCol3Select.disabled = false;
+  currentProfile.variables.forEach((variable, index) => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '6px';
+    row.style.alignItems = 'center';
+    
+    const varInput = document.createElement('input');
+    varInput.type = 'text';
+    varInput.value = variable;
+    varInput.className = 'form-input';
+    varInput.style.flex = '1';
+    varInput.style.minWidth = '0';
+    varInput.style.padding = '4px 6px';
+    varInput.style.fontSize = '0.8rem';
+    varInput.style.borderRadius = '4px';
+    varInput.style.background = 'rgba(0,0,0,0.3)';
+    varInput.style.color = 'var(--text-main)';
+    varInput.style.border = '1px solid var(--glass-border)';
+    varInput.placeholder = 'Var Name';
+    
+    varInput.addEventListener('change', () => {
+      const oldVar = currentProfile.variables[index];
+      const newVar = varInput.value.trim() || oldVar;
+      currentProfile.variables[index] = newVar;
+      if (oldVar !== newVar) {
+        currentProfile.mapping[newVar] = currentProfile.mapping[oldVar];
+        delete currentProfile.mapping[oldVar];
+        saveSchemaProfiles();
+        renderTemplateVariables();
+        renderSchemaMapper();
+        updateReceiptPaper();
+      }
+    });
 
-  const headers = ['id', ...Object.keys(cards[0]).filter(k => k !== 'id')];
+    const arrow = document.createElement('span');
+    arrow.textContent = '←';
+    arrow.style.color = 'var(--text-muted)';
+    arrow.style.fontSize = '0.9rem';
+    
+    const headerSelect = document.createElement('select');
+    headerSelect.className = 'form-input';
+    headerSelect.style.flex = '1.2';
+    headerSelect.style.minWidth = '0';
+    headerSelect.style.padding = '4px 6px';
+    headerSelect.style.fontSize = '0.8rem';
+    headerSelect.style.borderRadius = '4px';
+    headerSelect.style.background = 'rgba(0,0,0,0.3)';
+    headerSelect.style.color = 'var(--text-main)';
+    headerSelect.style.border = '1px solid var(--glass-border)';
+    
+    const unmappedOpt = document.createElement('option');
+    unmappedOpt.value = '';
+    unmappedOpt.textContent = '-- Unmapped --';
+    unmappedOpt.style.color = '#000';
+    headerSelect.appendChild(unmappedOpt);
+    
+    csvHeaders.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      opt.style.color = '#000';
+      headerSelect.appendChild(opt);
+    });
+    
+    headerSelect.value = currentProfile.mapping[variable] || '';
+    
+    headerSelect.addEventListener('change', () => {
+      currentProfile.mapping[currentProfile.variables[index]] = headerSelect.value;
+      saveSchemaProfiles();
+      renderTemplateVariables();
+      renderSchemaMapper();
+      updateReceiptPaper();
+    });
 
-  // Auto-detect default fields if not set in localStorage
-  let defaultCol1 = localStorage.getItem('auction-col1-field') || '';
-  let defaultCol2 = localStorage.getItem('auction-col2-field') || '';
-  let defaultCol3 = localStorage.getItem('auction-col3-field') || '';
-
-  if (!defaultCol1) {
-    const detected = headers.find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id';
-    defaultCol1 = detected;
-  }
-  if (!defaultCol2) {
-    const detected = headers.find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || headers[1] || 'id';
-    defaultCol2 = detected;
-  }
-  if (!defaultCol3) {
-    const detected = headers.find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id';
-    defaultCol3 = detected;
-  }
-
-  headers.forEach(header => {
-    // Col 1 Option
-    const opt1 = document.createElement('option');
-    opt1.value = header;
-    opt1.textContent = header === 'id' ? 'ID (Internal)' : header;
-    opt1.style.color = '#000';
-    if (header === defaultCol1) opt1.selected = true;
-    auctionCol1Select.appendChild(opt1);
-
-    // Col 2 Option
-    const opt2 = document.createElement('option');
-    opt2.value = header;
-    opt2.textContent = header === 'id' ? 'ID (Internal)' : header;
-    opt2.style.color = '#000';
-    if (header === defaultCol2) opt2.selected = true;
-    auctionCol2Select.appendChild(opt2);
-
-    // Col 3 Option
-    const opt3 = document.createElement('option');
-    opt3.value = header;
-    opt3.textContent = header === 'id' ? 'ID (Internal)' : header;
-    opt3.style.color = '#000';
-    if (header === defaultCol3) opt3.selected = true;
-    auctionCol3Select.appendChild(opt3);
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.className = 'remove-line-btn';
+    removeBtn.style.padding = '2px 6px';
+    removeBtn.style.fontSize = '0.8rem';
+    removeBtn.addEventListener('click', () => {
+      delete currentProfile.mapping[currentProfile.variables[index]];
+      currentProfile.variables.splice(index, 1);
+      saveSchemaProfiles();
+      renderTemplateVariables();
+      renderSchemaMapper();
+      renderInlineSchemaEditor();
+      updateReceiptPaper();
+    });
+    
+    row.appendChild(varInput);
+    row.appendChild(arrow);
+    row.appendChild(headerSelect);
+    row.appendChild(removeBtn);
+    
+    inlineSchemaEditor.appendChild(row);
   });
+
+  const addVarBtn = document.createElement('button');
+  addVarBtn.type = 'button';
+  addVarBtn.textContent = '➕ Add Variable';
+  addVarBtn.className = 'btn secondary-btn';
+  addVarBtn.style.padding = '4px 8px';
+  addVarBtn.style.fontSize = '0.8rem';
+  addVarBtn.style.marginTop = '4px';
+  addVarBtn.style.width = '100%';
+  addVarBtn.addEventListener('click', () => {
+    currentProfile.variables.push('NewVar');
+    currentProfile.mapping['NewVar'] = '';
+    saveSchemaProfiles();
+    renderTemplateVariables();
+    renderSchemaMapper();
+    renderInlineSchemaEditor();
+  });
+  inlineSchemaEditor.appendChild(addVarBtn);
+}
+
+function getDefaultAuctionLoopPattern(): string {
+  const currentSchema = schemaProfiles[activeSchemaId];
+  if (!currentSchema) return '{{Number}} | {{Donor}} | {{Price}}';
+  
+  let col1Var = currentSchema.variables.find(v => {
+    const name = v.toLowerCase();
+    const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+    return name === 'id' || name === 'number' || name.includes('donation') || mapped.includes('id') || mapped.includes('donation') || mapped === 'donation #';
+  });
+  if (!col1Var) col1Var = currentSchema.variables.find(v => v.toLowerCase().includes('id')) || currentSchema.variables[0] || 'Number';
+
+  let col2Var = currentSchema.variables.find(v => {
+    const name = v.toLowerCase();
+    const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+    return name === 'donor' || name === 'community' || name.includes('name') || mapped.includes('donor') || mapped.includes('community') || mapped.includes('name');
+  });
+  if (!col2Var) col2Var = currentSchema.variables.find(v => v.toLowerCase().includes('name') || v.toLowerCase().includes('donor')) || currentSchema.variables[1] || 'Donor';
+
+  let col3Var = currentSchema.variables.find(v => {
+    const name = v.toLowerCase();
+    const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+    return name === 'price' || name === 'bid' || mapped.includes('price') || mapped.includes('bid');
+  });
+  if (!col3Var) col3Var = currentSchema.variables.find(v => v.toLowerCase().includes('price') || v.toLowerCase().includes('bid')) || currentSchema.variables[3] || 'Price';
+
+  return `{{${col1Var}}} | {{${col2Var}}} | {{${col3Var}}}`;
+}
+
+function renderTemplateVariables() {
+  if (!templateVariablesList) return;
+  templateVariablesList.innerHTML = '';
+  if (cards.length === 0) return;
+
+  const sampleCard = lastClickedCard || cards[0] || {};
+  const currentSchema = schemaProfiles[activeSchemaId];
+  const itemsToRender = currentSchema 
+    ? currentSchema.variables.map(v => ({ key: v, value: sampleCard[currentSchema.mapping[v]] || '' }))
+    : Object.entries(sampleCard).map(([key, value]) => ({ key, value }));
+
+  for (const { key, value } of itemsToRender) {
+    const varTag = document.createElement('div');
+    varTag.style.background = 'rgba(255,255,255,0.1)';
+    varTag.style.padding = '4px 8px';
+    varTag.style.borderRadius = '4px';
+    varTag.style.cursor = 'pointer';
+    varTag.title = 'Click to copy';
+    varTag.innerHTML = `<strong style="color:var(--primary-color)">{{${key}}}</strong> = <span style="opacity:0.8">${String(value).substring(0, 15) + (String(value).length > 15 ? '...' : '')}</span>`;
+    
+    varTag.addEventListener('click', () => {
+      navigator.clipboard.writeText(`{{${key}}}`);
+      const oldBg = varTag.style.background;
+      varTag.style.background = 'rgba(74, 222, 128, 0.3)';
+      setTimeout(() => varTag.style.background = oldBg, 300);
+    });
+    
+    templateVariablesList.appendChild(varTag);
+  }
+  
+  renderInlineSchemaEditor();
 }
 
 function initDragAndDrop() {
@@ -1030,35 +1140,9 @@ async function printAuctionList() {
   lines.push({ enabled: true, text: 'AUCTION ITEMS ORDER', bold: true, align: 'center', size: 'large' });
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
 
-  // Load configured or auto-detected columns
-  let activeCol1 = localStorage.getItem('auction-col1-field') || '';
-  let activeCol2 = localStorage.getItem('auction-col2-field') || '';
-  let activeCol3 = localStorage.getItem('auction-col3-field') || '';
-
-  const sampleCard = cards[0] || {};
-  const validHeaders = ['id', ...Object.keys(sampleCard)];
-
-  if (!activeCol1 || !validHeaders.includes(activeCol1)) {
-    activeCol1 = Object.keys(sampleCard).find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id';
-  }
-  if (!activeCol2 || !validHeaders.includes(activeCol2)) {
-    activeCol2 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || Object.keys(sampleCard)[0] || 'id';
-  }
-  if (!activeCol3 || !validHeaders.includes(activeCol3)) {
-    activeCol3 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id';
-  }
-
-  const colHeader = formatAuctionColumns(
-    shortLabel(activeCol1),
-    shortLabel(activeCol2),
-    shortLabel(activeCol3),
-    totalWidth
-  );
-  lines.push({ enabled: true, text: colHeader, bold: true, align: 'left', size: 'normal' });
-  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
-
   // Add the single Loop Line representing all items
-  lines.push({ enabled: true, text: 'Loop', bold: false, align: 'left', size: 'normal', isLoop: true });
+  const loopPattern = getDefaultAuctionLoopPattern();
+  lines.push({ enabled: true, text: loopPattern, bold: false, align: 'left', size: 'normal', isLoop: true });
 
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
   lines.push({ enabled: true, text: 'TOTAL ITEMS: {TOTAL}', bold: true, align: 'center', size: 'normal' });
@@ -1070,10 +1154,11 @@ async function printAuctionList() {
   isTemplateMode = false;
 
   renderPrintPreview();
+  renderTemplateVariables();
 
   printPreviewSend.textContent = '🖨️ Print List';
   printPreviewBrowser.classList.remove('hidden');
-  templateVariablesPanel.classList.add('hidden');
+  templateVariablesPanel.classList.remove('hidden');
   importTemplateBtn.classList.add('hidden');
   exportTemplateBtn.classList.add('hidden');
 
@@ -1713,6 +1798,8 @@ const printPreviewSend = document.getElementById('print-preview-send') as HTMLBu
 const printPreviewBrowser = document.getElementById('print-preview-browser') as HTMLButtonElement;
 const templateVariablesPanel = document.getElementById('template-variables-panel') as HTMLDivElement;
 const templateVariablesList = document.getElementById('template-variables-list') as HTMLDivElement;
+const toggleInlineSchemaBtn = document.getElementById('toggle-inline-schema-btn') as HTMLButtonElement;
+const inlineSchemaEditor = document.getElementById('inline-schema-editor') as HTMLDivElement;
 
 const importTemplateBtn = document.getElementById('import-template-btn') as HTMLButtonElement;
 const exportTemplateBtn = document.getElementById('export-template-btn') as HTMLButtonElement;
@@ -1751,6 +1838,15 @@ function closePrintPreviewModal() {
   currentEditId = null;
   isTemplateMode = false;
   isAuctionPrint = false;
+  if (inlineSchemaEditor) inlineSchemaEditor.classList.add('hidden');
+}
+
+function formatTwoColumns(col1: string, col2: string, totalWidth: number): string {
+  const c2Width = 10;
+  const c1Width = totalWidth - c2Width - 1; // 1 space buffer
+  const c1 = col1.substring(0, c1Width).padEnd(c1Width, ' ');
+  const c2 = col2.substring(0, c2Width).padStart(c2Width, ' ');
+  return `${c1} ${c2}`;
 }
 
 function expandPrintLines(lines: PrintLine[]): PrintLine[] {
@@ -1758,42 +1854,73 @@ function expandPrintLines(lines: PrintLine[]): PrintLine[] {
   const paperWidthSetting = browserPaperSize.value || '80mm';
   const totalWidth = paperWidthSetting === '58mm' ? 32 : 40;
 
-  // Load configured or auto-detected columns
-  let activeCol1 = localStorage.getItem('auction-col1-field') || '';
-  let activeCol2 = localStorage.getItem('auction-col2-field') || '';
-  let activeCol3 = localStorage.getItem('auction-col3-field') || '';
-
-  const sampleCard = cards[0] || {};
-  const validHeaders = ['id', ...Object.keys(sampleCard)];
-
-  if (!activeCol1 || !validHeaders.includes(activeCol1)) {
-    activeCol1 = Object.keys(sampleCard).find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id';
-  }
-  if (!activeCol2 || !validHeaders.includes(activeCol2)) {
-    activeCol2 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || Object.keys(sampleCard)[0] || 'id';
-  }
-  if (!activeCol3 || !validHeaders.includes(activeCol3)) {
-    activeCol3 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id';
-  }
+  const currentSchema = schemaProfiles[activeSchemaId];
 
   lines.forEach(line => {
     if (!line.enabled) return;
 
     if (line.isLoop) {
-      cards.forEach(card => {
-        let col1Val = String(card[activeCol1] || '');
-        let col2Val = String(card[activeCol2] || '');
-        let col3Val = String(card[activeCol3] || '');
+      // 1. Generate the header line dynamically based on variables in line.text
+      const varRegex = /{{\s*([^}]+)\s*}}/g;
+      const variables: string[] = [];
+      let match;
+      while ((match = varRegex.exec(line.text)) !== null) {
+        variables.push(match[1].trim());
+      }
 
-        if (activeCol3.toLowerCase().includes('bid') || activeCol3.toLowerCase().includes('price')) {
+      const headers = variables.map(v => {
+        if (currentSchema && currentSchema.mapping[v]) {
+          return shortLabel(currentSchema.mapping[v]);
+        }
+        return shortLabel(v);
+      });
+
+      let headerText = '';
+      if (headers.length === 3) {
+        headerText = formatAuctionColumns(headers[0], headers[1], headers[2], totalWidth);
+      } else if (headers.length === 2) {
+        headerText = formatTwoColumns(headers[0], headers[1], totalWidth);
+      } else {
+        headerText = headers.join(' | ');
+      }
+
+      if (headerText) {
+        expanded.push({
+          enabled: true,
+          text: headerText,
+          bold: true,
+          align: 'left',
+          size: 'normal'
+        });
+        expanded.push({
+          enabled: true,
+          text: '-'.repeat(totalWidth),
+          bold: false,
+          align: 'center',
+          size: 'normal',
+          isSeparator: true
+        });
+      }
+
+      // 2. Loop through all cards
+      cards.forEach(card => {
+        const interpolated = interpolate(line.text, card, currentSchema?.mapping, currentSchema?.variables);
+        const parts = interpolated.split('|').map(p => p.trim());
+
+        let textVal = interpolated;
+        if (parts.length === 3) {
+          let col3Val = parts[2];
           if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
             col3Val = `$${col3Val}`;
           }
+          textVal = formatAuctionColumns(parts[0], parts[1], col3Val, totalWidth);
+        } else if (parts.length === 2) {
+          textVal = formatTwoColumns(parts[0], parts[1], totalWidth);
         }
 
         expanded.push({
           enabled: true,
-          text: formatAuctionColumns(col1Val, col2Val, col3Val, totalWidth),
+          text: textVal,
           bold: line.bold || false,
           align: line.align || 'left',
           size: line.size || 'normal'
@@ -2052,61 +2179,21 @@ function renderPrintPreview() {
       topRow.appendChild(removeBtn);
     } else if (line.isLoop) {
       const labelSpan = document.createElement('span');
-      labelSpan.textContent = '🔁 Loop:';
+      labelSpan.textContent = '🔁 Loop Pattern:';
       labelSpan.style.fontSize = '0.85rem';
       labelSpan.style.color = '#fbbf24';
       labelSpan.style.fontWeight = 'bold';
       labelSpan.style.marginRight = '5px';
       topRow.appendChild(labelSpan);
 
-      // Create three selects
-      const col1Select = document.createElement('select');
-      const col2Select = document.createElement('select');
-      const col3Select = document.createElement('select');
-
-      const selects = [col1Select, col2Select, col3Select];
-      const storageKeys = ['auction-col1-field', 'auction-col2-field', 'auction-col3-field'];
-      const defaultSelectors = [
-        (headers: string[]) => headers.find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id',
-        (headers: string[]) => headers.find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || headers[1] || 'id',
-        (headers: string[]) => headers.find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id'
-      ];
-
-      const headers = cards.length > 0 ? ['id', ...Object.keys(cards[0]).filter(k => k !== 'id')] : ['id'];
-
-      selects.forEach((sel, i) => {
-        sel.className = 'form-input';
-        sel.style.padding = '4px 6px';
-        sel.style.borderRadius = '4px';
-        sel.style.background = 'rgba(0,0,0,0.2)';
-        sel.style.color = 'var(--text-main)';
-        sel.style.border = '1px solid var(--glass-border)';
-        sel.style.fontSize = '0.8rem';
-        sel.style.width = i === 1 ? '100px' : '70px'; // Col 2 gets more width for name
-        sel.style.outline = 'none';
-
-        headers.forEach(h => {
-          const opt = document.createElement('option');
-          opt.value = h;
-          opt.textContent = h === 'id' ? 'ID' : shortLabel(h);
-          opt.style.color = '#000';
-          sel.appendChild(opt);
-        });
-
-        // Set value from localStorage or default
-        let savedVal = localStorage.getItem(storageKeys[i]) || '';
-        if (!savedVal || !headers.includes(savedVal)) {
-          savedVal = defaultSelectors[i](headers);
-          localStorage.setItem(storageKeys[i], savedVal);
-        }
-        sel.value = savedVal;
-
-        sel.addEventListener('change', () => {
-          localStorage.setItem(storageKeys[i], sel.value);
-          updateReceiptPaper();
-        });
-
-        topRow.appendChild(sel);
+      const textInput = document.createElement('input');
+      textInput.type = 'text';
+      textInput.value = line.text;
+      textInput.placeholder = 'e.g. {{Number}} | {{Donor}} | {{Price}}';
+      textInput.style.flex = '1';
+      textInput.addEventListener('input', () => {
+        printLines[index].text = textInput.value;
+        updateReceiptPaper();
       });
 
       const removeBtn = document.createElement('button');
@@ -2116,6 +2203,8 @@ function renderPrintPreview() {
         printLines.splice(index, 1);
         renderPrintPreview();
       });
+
+      topRow.appendChild(textInput);
       topRow.appendChild(removeBtn);
     } else {
       const textInput = document.createElement('input');
@@ -2284,6 +2373,14 @@ addSeparatorBtn.addEventListener('click', () => {
 
 closePrintPreview.addEventListener('click', closePrintPreviewModal);
 printPreviewCancel.addEventListener('click', closePrintPreviewModal);
+toggleInlineSchemaBtn?.addEventListener('click', () => {
+  if (inlineSchemaEditor) {
+    inlineSchemaEditor.classList.toggle('hidden');
+    if (!inlineSchemaEditor.classList.contains('hidden')) {
+      renderInlineSchemaEditor();
+    }
+  }
+});
 printPreviewModal.addEventListener('click', () => {
   // Prevent closing when clicking outside to avoid losing unsaved template changes
 });
@@ -2664,7 +2761,6 @@ searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputE
 
 settingsBtn.addEventListener('click', () => {
   renderCardPreviewFieldsSettings();
-  renderAuctionColumnsSettings();
   settingsModal.classList.remove('hidden');
 });
 closeSettingsBtn.addEventListener('click', () => {
@@ -2735,16 +2831,6 @@ auctionResetBtn.addEventListener('click', () => {
 
 auctionPrintBtn.addEventListener('click', async () => {
   await printAuctionList();
-});
-
-auctionCol1Select.addEventListener('change', () => {
-  localStorage.setItem('auction-col1-field', auctionCol1Select.value);
-});
-auctionCol2Select.addEventListener('change', () => {
-  localStorage.setItem('auction-col2-field', auctionCol2Select.value);
-});
-auctionCol3Select.addEventListener('change', () => {
-  localStorage.setItem('auction-col3-field', auctionCol3Select.value);
 });
 
 batchSelectAllBtn.addEventListener('click', () => {
@@ -2863,31 +2949,8 @@ editTemplateBtn.addEventListener('click', async () => {
   templateVariablesPanel.classList.remove('hidden');
   importTemplateBtn.classList.remove('hidden');
   exportTemplateBtn.classList.remove('hidden');
-  templateVariablesList.innerHTML = '';
   
-  const currentSchema = schemaProfiles[activeSchemaId];
-  const itemsToRender = currentSchema 
-    ? currentSchema.variables.map(v => ({ key: v, value: sampleCard[currentSchema.mapping[v]] || '' }))
-    : Object.entries(sampleCard).map(([key, value]) => ({ key, value }));
-
-  for (const { key, value } of itemsToRender) {
-    const varTag = document.createElement('div');
-    varTag.style.background = 'rgba(255,255,255,0.1)';
-    varTag.style.padding = '4px 8px';
-    varTag.style.borderRadius = '4px';
-    varTag.style.cursor = 'pointer';
-    varTag.title = 'Click to copy';
-    varTag.innerHTML = `<strong style="color:var(--primary-color)">{{${key}}}</strong> = <span style="opacity:0.8">${String(value).substring(0, 15) + (String(value).length > 15 ? '...' : '')}</span>`;
-    
-    varTag.addEventListener('click', () => {
-      navigator.clipboard.writeText(`{{${key}}}`);
-      const oldBg = varTag.style.background;
-      varTag.style.background = 'rgba(74, 222, 128, 0.3)';
-      setTimeout(() => varTag.style.background = oldBg, 300);
-    });
-    
-    templateVariablesList.appendChild(varTag);
-  }
+  renderTemplateVariables();
   
   renderPrintPreview();
   printPreviewModal.classList.remove('hidden');
@@ -3272,9 +3335,6 @@ exportAppBackupBtn.addEventListener('click', () => {
     'full-width': localStorage.getItem('full-width'),
     'grid-columns': localStorage.getItem('grid-columns'),
     'auction-card-order': localStorage.getItem('auction-card-order'),
-    'auction-col1-field': localStorage.getItem('auction-col1-field'),
-    'auction-col2-field': localStorage.getItem('auction-col2-field'),
-    'auction-col3-field': localStorage.getItem('auction-col3-field'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
