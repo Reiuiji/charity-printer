@@ -18,6 +18,10 @@ export interface PrintLine {
   isQr?: boolean;
   isBarcode?: boolean;
   barcodeFormat?: string;
+  isLoop?: boolean;
+  subLines?: PrintLine[];
+  loopHeader?: PrintLine;
+  loopHeaderSeparator?: PrintLine;
 }
 
 export interface TemplateProfile {

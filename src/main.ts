@@ -28,6 +28,9 @@ let lastClickedCard: CardData | null = null;
 let selectedPreviewFields: string[] = JSON.parse(localStorage.getItem('card-preview-fields') || '[]');
 let isSelectMode = false;
 let selectedItemIds: Set<string> = new Set();
+let isAuctionMode = false;
+let auctionOrder: string[] = JSON.parse(localStorage.getItem('auction-card-order') || '[]');
+let isAuctionPrint = false;
 
 // Schema Mapping
 let activeSchemaId = localStorage.getItem('activeSchemaId') || 'Charity';
@@ -100,7 +103,11 @@ const customIdNext = document.getElementById('custom-id-next') as HTMLInputEleme
 const createCustomReceiptBtn = document.getElementById('create-custom-receipt-btn') as HTMLButtonElement;
 const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
 const selectModeBtn = document.getElementById('select-mode-btn') as HTMLButtonElement;
+const auctionModeBtn = document.getElementById('auction-mode-btn') as HTMLButtonElement;
 const batchActionsBar = document.getElementById('batch-actions-bar') as HTMLDivElement;
+const auctionModeBar = document.getElementById('auction-mode-bar') as HTMLDivElement;
+const auctionResetBtn = document.getElementById('auction-reset-btn') as HTMLButtonElement;
+const auctionPrintBtn = document.getElementById('auction-print-btn') as HTMLButtonElement;
 const selectedCount = document.getElementById('selected-count') as HTMLSpanElement;
 const batchSelectAllBtn = document.getElementById('batch-select-all-btn') as HTMLButtonElement;
 const batchClearBtn = document.getElementById('batch-clear-btn') as HTMLButtonElement;
@@ -212,11 +219,15 @@ function applyBrowserPrintSettings() {
   const scale = localStorage.getItem('browser-print-scale') || '100%';
   const imgWidth = localStorage.getItem('browser-image-width') || '80%';
   
-  const width = paperSize === '58mm' ? '200px' : '280px';
+  const width = paperSize === '58mm' ? '200px' : paperSize === 'letter' ? '640px' : '280px';
+  const columnWidth = paperSize === '58mm' ? '240px' : paperSize === 'letter' ? '680px' : '320px';
+  const modalMaxWidth = paperSize === 'letter' ? '1280px' : '960px';
   const baseFontSize = 13 * (parseFloat(scale) / 100);
   
   const root = document.documentElement;
   root.style.setProperty('--paper-width', width);
+  root.style.setProperty('--paper-column-width', columnWidth);
+  root.style.setProperty('--modal-max-width', modalMaxWidth);
   root.style.setProperty('--paper-font-size', baseFontSize + 'px');
   root.style.setProperty('--print-image-width', imgWidth);
 }
@@ -240,6 +251,22 @@ function applyGridColumns() {
   } else {
     cardsContainer.style.removeProperty('--grid-columns');
   }
+}
+
+function sortCards() {
+  const orderMap = new Map(auctionOrder.map((id, index) => [id, index]));
+  cards.sort((a, b) => {
+    const aIndex = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
+    const bIndex = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
+    
+    if (aIndex !== bIndex) {
+      return aIndex - bIndex;
+    }
+    
+    const aOrig = a.originalIndex !== undefined ? Number(a.originalIndex) : 999999;
+    const bOrig = b.originalIndex !== undefined ? Number(b.originalIndex) : 999999;
+    return aOrig - bOrig;
+  });
 }
 
 // Initialization
@@ -277,6 +304,10 @@ function init() {
   const savedCards = localStorage.getItem('cards-data');
   if (savedCards) {
     cards = JSON.parse(savedCards);
+    cards.forEach((c, idx) => {
+      if (c.originalIndex === undefined) c.originalIndex = String(idx);
+    });
+    sortCards();
     initializeDefaultPreviewFields();
     renderCards();
   }
@@ -284,6 +315,7 @@ function init() {
   renderSchemaMapper();
   renderCardPreviewFieldsSettings();
   initDragAndDrop();
+  initCardDragAndDrop();
 
   const syncTime = localStorage.getItem('last-sync');
   if (syncTime) {
@@ -472,9 +504,10 @@ async function fetchData() {
 
         cards = validCards.map((item, index) => {
           const existingId = item['Donation #'] || item['id'] || item['ID'] || `item-${Date.now()}-${index}`;
-          return { ...item, id: existingId };
+          return { ...item, id: existingId, originalIndex: String(index) };
         });
 
+        sortCards();
         saveCards();
         initializeDefaultPreviewFields();
         renderCards();
@@ -736,6 +769,221 @@ function renderCardPreviewFieldsSettings() {
   });
 }
 
+function renderInlineSchemaEditor() {
+  if (!inlineSchemaEditor) return;
+  inlineSchemaEditor.innerHTML = '';
+  
+  if (cards.length === 0) {
+    inlineSchemaEditor.innerHTML = '<em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure mapping.</em>';
+    return;
+  }
+  
+  const csvHeaders = Object.keys(cards[0]);
+  const currentProfile = schemaProfiles[activeSchemaId];
+  if (!currentProfile) return;
+  
+  const headerDiv = document.createElement('div');
+  headerDiv.style.fontSize = '0.8rem';
+  headerDiv.style.fontWeight = 'bold';
+  headerDiv.style.color = 'var(--text-muted)';
+  headerDiv.style.marginBottom = '5px';
+  headerDiv.textContent = 'Map CSV columns to Variable tags:';
+  inlineSchemaEditor.appendChild(headerDiv);
+
+  currentProfile.variables.forEach((variable, index) => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '6px';
+    row.style.alignItems = 'center';
+    
+    const varInput = document.createElement('input');
+    varInput.type = 'text';
+    varInput.value = variable;
+    varInput.className = 'form-input';
+    varInput.style.flex = '1';
+    varInput.style.minWidth = '0';
+    varInput.style.padding = '4px 6px';
+    varInput.style.fontSize = '0.8rem';
+    varInput.style.borderRadius = '4px';
+    varInput.style.background = 'rgba(0,0,0,0.3)';
+    varInput.style.color = 'var(--text-main)';
+    varInput.style.border = '1px solid var(--glass-border)';
+    varInput.placeholder = 'Var Name';
+    
+    varInput.addEventListener('change', () => {
+      const oldVar = currentProfile.variables[index];
+      const newVar = varInput.value.trim() || oldVar;
+      currentProfile.variables[index] = newVar;
+      if (oldVar !== newVar) {
+        currentProfile.mapping[newVar] = currentProfile.mapping[oldVar];
+        delete currentProfile.mapping[oldVar];
+        saveSchemaProfiles();
+        renderTemplateVariables();
+        renderSchemaMapper();
+        updateReceiptPaper();
+      }
+    });
+
+    const arrow = document.createElement('span');
+    arrow.textContent = '←';
+    arrow.style.color = 'var(--text-muted)';
+    arrow.style.fontSize = '0.9rem';
+    
+    const headerSelect = document.createElement('select');
+    headerSelect.className = 'form-input';
+    headerSelect.style.flex = '1.2';
+    headerSelect.style.minWidth = '0';
+    headerSelect.style.padding = '4px 6px';
+    headerSelect.style.fontSize = '0.8rem';
+    headerSelect.style.borderRadius = '4px';
+    headerSelect.style.background = 'rgba(0,0,0,0.3)';
+    headerSelect.style.color = 'var(--text-main)';
+    headerSelect.style.border = '1px solid var(--glass-border)';
+    
+    const unmappedOpt = document.createElement('option');
+    unmappedOpt.value = '';
+    unmappedOpt.textContent = '-- Unmapped --';
+    unmappedOpt.style.color = '#000';
+    headerSelect.appendChild(unmappedOpt);
+    
+    csvHeaders.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      opt.style.color = '#000';
+      headerSelect.appendChild(opt);
+    });
+    
+    headerSelect.value = currentProfile.mapping[variable] || '';
+    
+    headerSelect.addEventListener('change', () => {
+      currentProfile.mapping[currentProfile.variables[index]] = headerSelect.value;
+      saveSchemaProfiles();
+      renderTemplateVariables();
+      renderSchemaMapper();
+      updateReceiptPaper();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.className = 'remove-line-btn';
+    removeBtn.style.padding = '2px 6px';
+    removeBtn.style.fontSize = '0.8rem';
+    removeBtn.addEventListener('click', () => {
+      delete currentProfile.mapping[currentProfile.variables[index]];
+      currentProfile.variables.splice(index, 1);
+      saveSchemaProfiles();
+      renderTemplateVariables();
+      renderSchemaMapper();
+      renderInlineSchemaEditor();
+      updateReceiptPaper();
+    });
+    
+    row.appendChild(varInput);
+    row.appendChild(arrow);
+    row.appendChild(headerSelect);
+    row.appendChild(removeBtn);
+    
+    inlineSchemaEditor.appendChild(row);
+  });
+
+  const addVarBtn = document.createElement('button');
+  addVarBtn.type = 'button';
+  addVarBtn.textContent = '➕ Add Variable';
+  addVarBtn.className = 'btn secondary-btn';
+  addVarBtn.style.padding = '4px 8px';
+  addVarBtn.style.fontSize = '0.8rem';
+  addVarBtn.style.marginTop = '4px';
+  addVarBtn.style.width = '100%';
+  addVarBtn.addEventListener('click', () => {
+    currentProfile.variables.push('NewVar');
+    currentProfile.mapping['NewVar'] = '';
+    saveSchemaProfiles();
+    renderTemplateVariables();
+    renderSchemaMapper();
+    renderInlineSchemaEditor();
+  });
+  inlineSchemaEditor.appendChild(addVarBtn);
+}
+
+function getDefaultAuctionLoopPattern(): string {
+  const currentSchema = schemaProfiles[activeSchemaId];
+  if (!currentSchema) return '{{Item ID}} | {{Item Name}} | {{Price}}';
+  
+  let col1Var = currentSchema.variables.find(v => {
+    const name = v.toLowerCase();
+    return name === 'item id' || name === 'id';
+  });
+  if (!col1Var) {
+    col1Var = currentSchema.variables.find(v => {
+      const name = v.toLowerCase();
+      const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+      return name === 'number' || name.includes('donation') || mapped.includes('id') || mapped.includes('donation') || mapped === 'donation #';
+    });
+  }
+  if (!col1Var) col1Var = currentSchema.variables.find(v => v.toLowerCase().includes('id')) || currentSchema.variables[0] || 'Item ID';
+
+  let col2Var = currentSchema.variables.find(v => {
+    const name = v.toLowerCase();
+    return name === 'item name' || name === 'name';
+  });
+  if (!col2Var) {
+    col2Var = currentSchema.variables.find(v => {
+      const name = v.toLowerCase();
+      const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+      return name === 'donor' || name === 'community' || mapped.includes('donor') || mapped.includes('community') || mapped.includes('name');
+    });
+  }
+  if (!col2Var) col2Var = currentSchema.variables.find(v => v.toLowerCase().includes('name') || v.toLowerCase().includes('donor')) || currentSchema.variables[1] || 'Item Name';
+
+  let col3Var = currentSchema.variables.find(v => {
+    const name = v.toLowerCase();
+    return name === 'price' || name === 'bid';
+  });
+  if (!col3Var) {
+    col3Var = currentSchema.variables.find(v => {
+      const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+      return mapped.includes('price') || mapped.includes('bid');
+    });
+  }
+  if (!col3Var) col3Var = currentSchema.variables.find(v => v.toLowerCase().includes('price') || v.toLowerCase().includes('bid')) || currentSchema.variables[3] || 'Price';
+
+  return `{{${col1Var}}} | {{${col2Var}}} | {{${col3Var}}}`;
+}
+
+function renderTemplateVariables() {
+  if (!templateVariablesList) return;
+  templateVariablesList.innerHTML = '';
+  if (cards.length === 0) return;
+
+  const sampleCard = lastClickedCard || cards[0] || {};
+  const currentSchema = schemaProfiles[activeSchemaId];
+  const itemsToRender = currentSchema 
+    ? currentSchema.variables.map(v => ({ key: v, value: sampleCard[currentSchema.mapping[v]] || '' }))
+    : Object.entries(sampleCard).map(([key, value]) => ({ key, value }));
+
+  for (const { key, value } of itemsToRender) {
+    const varTag = document.createElement('div');
+    varTag.style.background = 'rgba(255,255,255,0.1)';
+    varTag.style.padding = '4px 8px';
+    varTag.style.borderRadius = '4px';
+    varTag.style.cursor = 'pointer';
+    varTag.title = 'Click to copy';
+    varTag.innerHTML = `<strong style="color:var(--primary-color)">{{${key}}}</strong> = <span style="opacity:0.8">${String(value).substring(0, 15) + (String(value).length > 15 ? '...' : '')}</span>`;
+    
+    varTag.addEventListener('click', () => {
+      navigator.clipboard.writeText(`{{${key}}}`);
+      const oldBg = varTag.style.background;
+      varTag.style.background = 'rgba(74, 222, 128, 0.3)';
+      setTimeout(() => varTag.style.background = oldBg, 300);
+    });
+    
+    templateVariablesList.appendChild(varTag);
+  }
+  
+  renderInlineSchemaEditor();
+}
+
 function initDragAndDrop() {
   if (!cardPreviewFieldsContainer) return;
 
@@ -807,6 +1055,172 @@ function saveNewFieldsOrder() {
   localStorage.setItem('card-preview-fields-order', JSON.stringify(newOrder));
 
   renderCards(searchInput.value);
+}
+
+function initCardDragAndDrop() {
+  if (!cardsContainer) return;
+
+  cardsContainer.addEventListener('dragstart', (e) => {
+    if (!isAuctionMode) return;
+    const target = e.target as HTMLElement;
+    const cardEl = target.closest('.card') as HTMLElement;
+    if (cardEl) {
+      cardEl.classList.add('dragging');
+      e.dataTransfer?.setData('text/plain', cardEl.dataset.id || '');
+    }
+  });
+
+  cardsContainer.addEventListener('dragend', (e) => {
+    if (!isAuctionMode) return;
+    const target = e.target as HTMLElement;
+    const cardEl = target.closest('.card') as HTMLElement;
+    if (cardEl) {
+      cardEl.classList.remove('dragging');
+    }
+    saveNewCardOrder();
+  });
+
+  cardsContainer.addEventListener('dragover', (e) => {
+    if (!isAuctionMode) return;
+    e.preventDefault();
+    const draggingEl = cardsContainer.querySelector('.card.dragging') as HTMLElement;
+    if (!draggingEl) return;
+
+    const closestCard = getClosestCard(cardsContainer, e.clientX, e.clientY);
+    if (!closestCard) {
+      cardsContainer.appendChild(draggingEl);
+      return;
+    }
+
+    const box = closestCard.getBoundingClientRect();
+    const isAfter = e.clientX > box.left + box.width / 2;
+    if (isAfter) {
+      closestCard.parentNode?.insertBefore(draggingEl, closestCard.nextSibling);
+    } else {
+      closestCard.parentNode?.insertBefore(draggingEl, closestCard);
+    }
+  });
+}
+
+function getClosestCard(container: HTMLElement, x: number, y: number): HTMLElement | null {
+  const cardsList = [...container.querySelectorAll('.card:not(.dragging)')] as HTMLElement[];
+  if (cardsList.length === 0) return null;
+  
+  return cardsList.reduce<{ distance: number; element: HTMLElement | null }>((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const centerX = box.left + box.width / 2;
+    const centerY = box.top + box.height / 2;
+    const distance = Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2);
+    
+    if (distance < closest.distance) {
+      return { distance: distance, element: child };
+    }
+    return closest;
+  }, { distance: Number.POSITIVE_INFINITY, element: null }).element;
+}
+
+function saveNewCardOrder() {
+  const cardElements = [...cardsContainer.querySelectorAll('.card')] as HTMLElement[];
+  const newOrderIds = cardElements.map(el => el.dataset.id || '');
+  
+  const cardMap = new Map(cards.map(c => [c.id, c]));
+  const reorderedCards: CardData[] = [];
+  
+  newOrderIds.forEach(id => {
+    if (cardMap.has(id)) {
+      reorderedCards.push(cardMap.get(id)!);
+    }
+  });
+  
+  cards.forEach(c => {
+    if (!newOrderIds.includes(c.id)) {
+      reorderedCards.push(c);
+    }
+  });
+  
+  cards = reorderedCards;
+  auctionOrder = cards.map(c => c.id);
+  localStorage.setItem('auction-card-order', JSON.stringify(auctionOrder));
+  saveCards();
+}
+
+function formatAuctionColumns(col1: string, col2: string, col3: string, totalWidth: number): string {
+  const c1 = col1.substring(0, 4).padEnd(4, ' ');
+  const c3 = col3.substring(0, 7).padStart(7, ' ');
+  const middleWidth = totalWidth - c1.length - c3.length - 2; // 2 spaces buffer
+  const c2 = col2.substring(0, middleWidth).padEnd(middleWidth, ' ');
+  return `${c1} ${c2} ${c3}`;
+}
+
+async function printAuctionList() {
+  const paperWidthSetting = browserPaperSize.value || '80mm';
+  const totalWidth = paperWidthSetting === '58mm' ? 32 : paperWidthSetting === 'letter' ? 80 : 40;
+
+  const lines: PrintLine[] = [];
+
+  lines.push({ enabled: true, text: 'AUCTION ITEMS ORDER', bold: true, align: 'center', size: 'large' });
+  lines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+
+  // Dynamically generate the default header text from loop variables
+  const loopPattern = getDefaultAuctionLoopPattern();
+  const varRegex = /{{\s*([^}]+)\s*}}/g;
+  const variables: string[] = [];
+  let match;
+  while ((match = varRegex.exec(loopPattern)) !== null) {
+    variables.push(match[1].trim());
+  }
+
+  const currentSchema = schemaProfiles[activeSchemaId];
+  const headers = variables.map(v => {
+    if (currentSchema && currentSchema.mapping[v]) {
+      return shortLabel(currentSchema.mapping[v]);
+    }
+    return shortLabel(v);
+  });
+
+  let headerText = '';
+  if (headers.length === 3) {
+    headerText = formatAuctionColumns(headers[0], headers[1], headers[2], totalWidth);
+  } else if (headers.length === 2) {
+    headerText = formatTwoColumns(headers[0], headers[1], totalWidth);
+  } else {
+    headerText = headers.join(' | ');
+  }
+
+  // Add the Loop Group representing all items
+  lines.push({
+    enabled: true,
+    text: 'Auction Loop Group',
+    bold: false,
+    align: 'center',
+    size: 'normal',
+    isLoop: true,
+    loopHeader: { enabled: true, text: headerText, bold: true, align: 'center', size: 'xs' },
+    loopHeaderSeparator: { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true },
+    subLines: [
+      { enabled: true, text: loopPattern, bold: false, align: 'center', size: 'xs' }
+    ]
+  });
+
+  lines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
+  lines.push({ enabled: true, text: 'TOTAL ITEMS: {TOTAL}', bold: true, align: 'center', size: 'normal' });
+
+  // Open in print preview modal instead of immediate auto-triggered OS print
+  isAuctionPrint = true;
+  printLines = lines;
+  currentEditId = null;
+  isTemplateMode = false;
+
+  renderPrintPreview();
+  renderTemplateVariables();
+
+  printPreviewSend.textContent = '🖨️ Print List';
+  printPreviewBrowser.classList.remove('hidden');
+  templateVariablesPanel.classList.remove('hidden');
+  importTemplateBtn.classList.add('hidden');
+  exportTemplateBtn.classList.add('hidden');
+
+  printPreviewModal.classList.remove('hidden');
 }
 
 schemaProfileSelect?.addEventListener('change', (e) => {
@@ -959,7 +1373,12 @@ function renderCards(filterText = '') {
 
   filtered.forEach(card => {
     const cardEl = document.createElement('div');
-    cardEl.className = 'card';
+    if (isAuctionMode) {
+      cardEl.className = 'card draggable';
+      cardEl.setAttribute('draggable', 'true');
+    } else {
+      cardEl.className = 'card';
+    }
     cardEl.dataset.id = card.id;
 
     // Try to find a title field
@@ -1087,6 +1506,8 @@ function renderCards(filterText = '') {
           cardEl.classList.remove('selected');
         }
         updateSelectedCountUI();
+      } else if (isAuctionMode) {
+        // Do nothing on click in auction mode to prevent accidental modal openings during drag actions
       } else {
         openPreviewModal(id);
       }
@@ -1435,6 +1856,8 @@ const printPreviewSend = document.getElementById('print-preview-send') as HTMLBu
 const printPreviewBrowser = document.getElementById('print-preview-browser') as HTMLButtonElement;
 const templateVariablesPanel = document.getElementById('template-variables-panel') as HTMLDivElement;
 const templateVariablesList = document.getElementById('template-variables-list') as HTMLDivElement;
+const toggleInlineSchemaBtn = document.getElementById('toggle-inline-schema-btn') as HTMLButtonElement;
+const inlineSchemaEditor = document.getElementById('inline-schema-editor') as HTMLDivElement;
 
 const importTemplateBtn = document.getElementById('import-template-btn') as HTMLButtonElement;
 const exportTemplateBtn = document.getElementById('export-template-btn') as HTMLButtonElement;
@@ -1472,13 +1895,150 @@ function closePrintPreviewModal() {
   printPreviewModal.classList.add('hidden');
   currentEditId = null;
   isTemplateMode = false;
+  isAuctionPrint = false;
+  if (inlineSchemaEditor) inlineSchemaEditor.classList.add('hidden');
 }
 
-function updateReceiptPaper() {
-  savePrintTemplate();
+function formatTwoColumns(col1: string, col2: string, totalWidth: number): string {
+  const c2Width = 10;
+  const c1Width = totalWidth - c2Width - 1; // 1 space buffer
+  const c1 = col1.substring(0, c1Width).padEnd(c1Width, ' ');
+  const c2 = col2.substring(0, c2Width).padStart(c2Width, ' ');
+  return `${c1} ${c2}`;
+}
+
+async function expandPrintLines(lines: PrintLine[]): Promise<PrintLine[]> {
+  const expanded: PrintLine[] = [];
+  const paperWidthSetting = browserPaperSize.value || '80mm';
+  const totalWidth = paperWidthSetting === '58mm' ? 32 : paperWidthSetting === 'letter' ? 80 : 40;
+
+  const currentSchema = schemaProfiles[activeSchemaId];
+
+  for (const line of lines) {
+    if (!line.enabled) continue;
+
+    if (line.isLoop) {
+      if (line.loopHeader && line.loopHeader.enabled) {
+        let headerTextVal = line.loopHeader.text;
+        if (headerTextVal.includes('|')) {
+          const parts = headerTextVal.split('|').map(p => p.trim());
+          if (parts.length === 3) {
+            headerTextVal = formatAuctionColumns(parts[0], parts[1], parts[2], totalWidth);
+          } else if (parts.length === 2) {
+            headerTextVal = formatTwoColumns(parts[0], parts[1], totalWidth);
+          }
+        }
+        expanded.push({
+          ...line.loopHeader,
+          text: headerTextVal
+        });
+        const sep = line.loopHeaderSeparator || {
+          enabled: true,
+          text: '-------------------------',
+          bold: false,
+          align: 'center',
+          size: 'normal',
+          isSeparator: true
+        };
+        if (sep.enabled) {
+          expanded.push({
+            ...sep
+          });
+        }
+      }
+      const subLines = line.subLines || [];
+
+      // Loop through all cards
+      for (const card of cards) {
+        for (const subLine of subLines) {
+          if (!subLine.enabled) continue;
+
+          if (subLine.isSeparator) {
+            expanded.push({ ...subLine });
+            continue;
+          }
+
+          const interpolated = interpolate(subLine.text, card, currentSchema?.mapping, currentSchema?.variables);
+          let textVal = interpolated;
+
+          if (subLine.text.includes('|')) {
+            const parts = interpolated.split('|').map(p => p.trim());
+            if (parts.length === 3) {
+              let col3Val = parts[2];
+              if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
+                col3Val = `$${col3Val}`;
+              }
+              textVal = formatAuctionColumns(parts[0], parts[1], col3Val, totalWidth);
+            } else if (parts.length === 2) {
+              textVal = formatTwoColumns(parts[0], parts[1], totalWidth);
+            }
+          }
+
+          let imageUrlVal = subLine.imageUrl;
+          if (subLine.isImage && imageUrlVal) {
+            imageUrlVal = normalizeImageUrl(interpolate(imageUrlVal, card, currentSchema?.mapping, currentSchema?.variables));
+          }
+
+          const subLineCopy = {
+            ...subLine,
+            text: textVal,
+            imageUrl: imageUrlVal
+          };
+
+          // Generate barcode/QR if needed
+          if (subLineCopy.isQr) {
+            try {
+              subLineCopy.imageUrl = await QRCode.toDataURL(textVal, { width: 250, margin: 2, scale: 4 });
+            } catch {}
+          } else if (subLineCopy.isBarcode) {
+            try {
+              const canvas = document.createElement('canvas');
+              bwipjs.toCanvas(canvas, { bcid: subLineCopy.barcodeFormat || 'code128', text: textVal || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
+              subLineCopy.imageUrl = canvas.toDataURL('image/png');
+            } catch (e: any) {
+              const canvas = document.createElement('canvas');
+              canvas.width = 300;
+              canvas.height = 60;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 300, 60);
+                ctx.fillStyle = 'red';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Barcode Error', 150, 25);
+                ctx.font = '12px sans-serif';
+                const msg = e.message ? (e.message.split(':').pop()?.trim() || e.message) : 'Invalid format';
+                ctx.fillText(msg, 150, 45);
+              }
+              subLineCopy.imageUrl = canvas.toDataURL('image/png');
+            }
+          }
+
+          expanded.push(subLineCopy);
+        }
+      }
+    } else {
+      let lineText = line.text;
+      if (lineText.includes('{TOTAL}')) {
+        lineText = lineText.replace(/{TOTAL}/g, String(cards.length));
+      }
+      expanded.push({
+        ...line,
+        text: lineText
+      });
+    }
+  }
+
+  return expanded;
+}
+
+async function updateReceiptPaper() {
+  if (!isAuctionPrint) savePrintTemplate();
   // Render receipt paper
   receiptPaper.innerHTML = '';
-  printLines.forEach((line, index) => {
+  const linesToRender = isAuctionPrint ? await expandPrintLines(printLines) : printLines;
+  linesToRender.forEach((line, index) => {
     if (!line.enabled) return;
     if (line.isImage && line.imageUrl) {
       const imgWrap = document.createElement('div');
@@ -1709,6 +2269,499 @@ function renderPrintPreview() {
       });
 
       topRow.appendChild(removeBtn);
+    } else if (line.isLoop) {
+      control.classList.add('loop-group-card');
+
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = '🔁 Loop Group';
+      labelSpan.style.fontSize = '0.9rem';
+      labelSpan.style.color = '#fbbf24';
+      labelSpan.style.fontWeight = 'bold';
+      labelSpan.style.marginRight = '5px';
+      topRow.appendChild(labelSpan);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-line-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.title = 'Delete Loop Group';
+      removeBtn.addEventListener('click', () => {
+        printLines.splice(index, 1);
+        renderPrintPreview();
+      });
+      topRow.appendChild(removeBtn);
+
+      if (!line.loopHeader) {
+        line.loopHeader = { enabled: true, text: 'ID | Item | Price', bold: true, align: 'center', size: 'xs' };
+      }
+
+      const loopHeaderContainer = document.createElement('div');
+      loopHeaderContainer.style.background = 'rgba(255,255,255,0.03)';
+      loopHeaderContainer.style.border = '1px dashed rgba(255,255,255,0.08)';
+      loopHeaderContainer.style.borderRadius = '6px';
+      loopHeaderContainer.style.padding = '8px';
+      loopHeaderContainer.style.marginTop = '8px';
+      loopHeaderContainer.style.display = 'flex';
+      loopHeaderContainer.style.flexDirection = 'column';
+      loopHeaderContainer.style.gap = '6px';
+
+      const headerTopRow = document.createElement('div');
+      headerTopRow.className = 'print-line-top';
+
+      const headerLabel = document.createElement('span');
+      headerLabel.textContent = '📋 Header (Once):';
+      headerLabel.style.fontSize = '0.8rem';
+      headerLabel.style.color = '#10b981';
+      headerLabel.style.fontWeight = 'bold';
+      headerLabel.style.marginRight = '5px';
+
+      const headerCheckbox = document.createElement('input');
+      headerCheckbox.type = 'checkbox';
+      headerCheckbox.checked = line.loopHeader.enabled;
+      headerCheckbox.addEventListener('change', () => {
+        line.loopHeader!.enabled = headerCheckbox.checked;
+        updateReceiptPaper();
+      });
+
+      const headerTextInput = document.createElement('input');
+      headerTextInput.type = 'text';
+      headerTextInput.value = line.loopHeader.text;
+      headerTextInput.placeholder = 'e.g. Num  Donor  Price';
+      headerTextInput.style.flex = '1';
+      headerTextInput.addEventListener('input', () => {
+        line.loopHeader!.text = headerTextInput.value;
+        updateReceiptPaper();
+      });
+
+      headerTopRow.appendChild(headerLabel);
+      headerTopRow.appendChild(headerCheckbox);
+      headerTopRow.appendChild(headerTextInput);
+      loopHeaderContainer.appendChild(headerTopRow);
+
+      const headerOptionsRow = document.createElement('div');
+      headerOptionsRow.className = 'print-line-options';
+      headerOptionsRow.style.paddingLeft = '30px';
+
+      const makeHeaderBtn = (lbl: string, isActive: boolean, onClick: () => void) => {
+        const btn = document.createElement('button');
+        btn.textContent = lbl;
+        btn.type = 'button';
+        if (isActive) btn.classList.add('active');
+        btn.addEventListener('click', onClick);
+        return btn;
+      };
+
+      headerOptionsRow.appendChild(makeHeaderBtn('Bold', line.loopHeader.bold || false, () => {
+        line.loopHeader!.bold = !line.loopHeader!.bold;
+        renderPrintPreview();
+      }));
+
+      headerOptionsRow.appendChild(makeHeaderBtn('Left', line.loopHeader.align === 'left', () => {
+        line.loopHeader!.align = 'left';
+        renderPrintPreview();
+      }));
+      headerOptionsRow.appendChild(makeHeaderBtn('Center', line.loopHeader.align === 'center', () => {
+        line.loopHeader!.align = 'center';
+        renderPrintPreview();
+      }));
+      headerOptionsRow.appendChild(makeHeaderBtn('Right', line.loopHeader.align === 'right', () => {
+        line.loopHeader!.align = 'right';
+        renderPrintPreview();
+      }));
+
+      const headerSizes: Array<'xs' | 'small' | 'normal' | 'large' | 'xl'> = ['xl', 'large', 'normal', 'small', 'xs'];
+      headerSizes.forEach(sz => {
+        headerOptionsRow.appendChild(makeHeaderBtn(sz.toUpperCase(), line.loopHeader!.size === sz, () => {
+          line.loopHeader!.size = sz;
+          renderPrintPreview();
+        }));
+      });
+
+      loopHeaderContainer.appendChild(headerOptionsRow);
+      control.appendChild(loopHeaderContainer);
+
+      if (!line.loopHeaderSeparator) {
+        line.loopHeaderSeparator = { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true };
+      }
+
+      const loopSepContainer = document.createElement('div');
+      loopSepContainer.style.background = 'rgba(255,255,255,0.03)';
+      loopSepContainer.style.border = '1px dashed rgba(255,255,255,0.08)';
+      loopSepContainer.style.borderRadius = '6px';
+      loopSepContainer.style.padding = '8px';
+      loopSepContainer.style.marginTop = '8px';
+      loopSepContainer.style.display = 'flex';
+      loopSepContainer.style.flexDirection = 'column';
+      loopSepContainer.style.gap = '6px';
+
+      const sepTopRow = document.createElement('div');
+      sepTopRow.className = 'print-line-top';
+
+      const sepLabel = document.createElement('span');
+      sepLabel.textContent = '〰️ Line Break:';
+      sepLabel.style.fontSize = '0.8rem';
+      sepLabel.style.color = '#10b981';
+      sepLabel.style.fontWeight = 'bold';
+      sepLabel.style.marginRight = '5px';
+
+      const sepCheckbox = document.createElement('input');
+      sepCheckbox.type = 'checkbox';
+      sepCheckbox.checked = line.loopHeaderSeparator.enabled;
+      sepCheckbox.addEventListener('change', () => {
+        line.loopHeaderSeparator!.enabled = sepCheckbox.checked;
+        updateReceiptPaper();
+      });
+
+      const sepTextInput = document.createElement('input');
+      sepTextInput.type = 'text';
+      sepTextInput.value = line.loopHeaderSeparator.text;
+      sepTextInput.placeholder = 'e.g. --------------------------------';
+      sepTextInput.style.flex = '1';
+      sepTextInput.addEventListener('input', () => {
+        line.loopHeaderSeparator!.text = sepTextInput.value;
+        updateReceiptPaper();
+      });
+
+      sepTopRow.appendChild(sepLabel);
+      sepTopRow.appendChild(sepCheckbox);
+      sepTopRow.appendChild(sepTextInput);
+      loopSepContainer.appendChild(sepTopRow);
+
+      const sepOptionsRow = document.createElement('div');
+      sepOptionsRow.className = 'print-line-options';
+      sepOptionsRow.style.paddingLeft = '30px';
+
+      sepOptionsRow.appendChild(makeHeaderBtn('Bold', line.loopHeaderSeparator.bold || false, () => {
+        line.loopHeaderSeparator!.bold = !line.loopHeaderSeparator!.bold;
+        renderPrintPreview();
+      }));
+
+      sepOptionsRow.appendChild(makeHeaderBtn('Left', line.loopHeaderSeparator.align === 'left', () => {
+        line.loopHeaderSeparator!.align = 'left';
+        renderPrintPreview();
+      }));
+      sepOptionsRow.appendChild(makeHeaderBtn('Center', line.loopHeaderSeparator.align === 'center', () => {
+        line.loopHeaderSeparator!.align = 'center';
+        renderPrintPreview();
+      }));
+      sepOptionsRow.appendChild(makeHeaderBtn('Right', line.loopHeaderSeparator.align === 'right', () => {
+        line.loopHeaderSeparator!.align = 'right';
+        renderPrintPreview();
+      }));
+
+      headerSizes.forEach(sz => {
+        sepOptionsRow.appendChild(makeHeaderBtn(sz.toUpperCase(), line.loopHeaderSeparator!.size === sz, () => {
+          line.loopHeaderSeparator!.size = sz;
+          renderPrintPreview();
+        }));
+      });
+
+      loopSepContainer.appendChild(sepOptionsRow);
+      control.appendChild(loopSepContainer);
+
+      if (!line.subLines) {
+        line.subLines = [];
+      }
+
+      const subLinesContainer = document.createElement('div');
+      subLinesContainer.className = 'loop-sublines-container';
+
+      line.subLines.forEach((subLine, subIndex) => {
+        const subControl = document.createElement('div');
+        subControl.className = 'loop-subline-control';
+        subControl.draggable = false;
+
+        subControl.addEventListener('dragstart', (e) => {
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', `sub:${index}:${subIndex}`);
+          }
+          subControl.classList.add('dragging');
+          e.stopPropagation();
+        });
+        subControl.addEventListener('dragend', (e) => {
+          subControl.classList.remove('dragging');
+          e.stopPropagation();
+        });
+
+        subControl.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          subControl.style.borderTop = '2px solid var(--primary-color)';
+          e.stopPropagation();
+        });
+        subControl.addEventListener('dragleave', (e) => {
+          subControl.style.borderTop = '';
+          e.stopPropagation();
+        });
+        subControl.addEventListener('drop', (e) => {
+          e.preventDefault();
+          subControl.style.borderTop = '';
+          e.stopPropagation();
+          
+          if (e.dataTransfer) {
+            const dataStr = e.dataTransfer.getData('text/plain');
+            if (dataStr.startsWith('sub:')) {
+              const parts = dataStr.split(':');
+              const parentIdx = parseInt(parts[1]);
+              const fromSubIdx = parseInt(parts[2]);
+
+              if (parentIdx === index && fromSubIdx !== subIndex) {
+                const item = line.subLines!.splice(fromSubIdx, 1)[0];
+                line.subLines!.splice(subIndex, 0, item);
+                renderPrintPreview();
+              }
+            }
+          }
+        });
+
+        const subTopRow = document.createElement('div');
+        subTopRow.className = 'print-line-top';
+
+        const subDragHandle = document.createElement('span');
+        subDragHandle.textContent = '☰';
+        subDragHandle.style.cursor = 'grab';
+        subDragHandle.style.marginRight = '8px';
+        subDragHandle.style.color = '#888';
+        
+        subDragHandle.addEventListener('mouseenter', () => {
+          subControl.draggable = true;
+        });
+        subDragHandle.addEventListener('mouseleave', () => {
+          subControl.draggable = false;
+        });
+
+        const subCheckbox = document.createElement('input');
+        subCheckbox.type = 'checkbox';
+        subCheckbox.checked = subLine.enabled;
+        subCheckbox.addEventListener('change', () => {
+          subLine.enabled = subCheckbox.checked;
+          updateReceiptPaper();
+        });
+
+        subTopRow.appendChild(subDragHandle);
+        subTopRow.appendChild(subCheckbox);
+
+        if (subLine.isImage) {
+          if (subLine.isQr || subLine.isBarcode) {
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.value = subLine.text || '';
+            textInput.style.flex = '1';
+            textInput.placeholder = subLine.isQr ? 'QR Code Data' : 'Barcode Data';
+            
+            let typingTimer: any;
+            textInput.addEventListener('input', () => {
+              subLine.text = textInput.value;
+              clearTimeout(typingTimer);
+              typingTimer = setTimeout(() => {
+                updateReceiptPaper();
+              }, 300);
+            });
+            subTopRow.appendChild(textInput);
+
+            if (subLine.isBarcode) {
+              const formatSelect = document.createElement('select');
+              formatSelect.style.marginLeft = '10px';
+              
+              const formats = ['code128', 'code39', 'ean13', 'upca'];
+              formats.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f.toUpperCase();
+                opt.style.color = '#000';
+                formatSelect.appendChild(opt);
+              });
+              formatSelect.value = subLine.barcodeFormat || 'code128';
+              formatSelect.addEventListener('change', () => {
+                 subLine.barcodeFormat = formatSelect.value;
+                 updateReceiptPaper();
+              });
+              subTopRow.appendChild(formatSelect);
+            }
+          } else {
+            const urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.value = subLine.imageUrl || '';
+            urlInput.placeholder = 'Image URL (e.g. https://... or {{Image}})';
+            urlInput.style.flex = '1';
+            
+            let typingTimer: any;
+            urlInput.addEventListener('input', () => {
+              subLine.imageUrl = urlInput.value;
+              delete subLine.rasterData;
+              clearTimeout(typingTimer);
+              typingTimer = setTimeout(() => {
+                updateReceiptPaper();
+              }, 300);
+            });
+            subTopRow.appendChild(urlInput);
+
+            const sliderWrap = document.createElement('div');
+            sliderWrap.style.display = 'flex';
+            sliderWrap.style.alignItems = 'center';
+            sliderWrap.style.gap = '5px';
+            sliderWrap.style.marginLeft = '10px';
+            
+            const leftLabel = document.createElement('span');
+            leftLabel.textContent = '🌘';
+            leftLabel.style.fontSize = '0.8rem';
+            
+            const rightLabel = document.createElement('span');
+            rightLabel.textContent = '☀️';
+            rightLabel.style.fontSize = '0.8rem';
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = '0.2';
+            slider.max = '3.0';
+            slider.step = '0.1';
+            slider.value = (subLine.gamma || 1.0).toString();
+            slider.addEventListener('input', () => {
+              subLine.gamma = parseFloat(slider.value);
+              updateReceiptPaper();
+            });
+            
+            const resetBtn = document.createElement('button');
+            resetBtn.type = 'button';
+            resetBtn.innerHTML = '↺';
+            resetBtn.style.background = 'none';
+            resetBtn.style.border = 'none';
+            resetBtn.style.color = 'var(--text-color)';
+            resetBtn.style.cursor = 'pointer';
+            resetBtn.style.padding = '0 4px';
+            resetBtn.style.fontSize = '1rem';
+            resetBtn.title = 'Reset to default contrast';
+            resetBtn.addEventListener('click', () => {
+              slider.value = '1.0';
+              subLine.gamma = 1.0;
+              updateReceiptPaper();
+            });
+            
+            sliderWrap.appendChild(leftLabel);
+            sliderWrap.appendChild(slider);
+            sliderWrap.appendChild(rightLabel);
+            sliderWrap.appendChild(resetBtn);
+            subTopRow.appendChild(sliderWrap);
+          }
+        } else if (subLine.isSeparator) {
+          const sepLabel = document.createElement('span');
+          sepLabel.textContent = '------------------ Horizontal Separator ------------------';
+          sepLabel.style.fontSize = '0.8rem';
+          sepLabel.style.color = 'var(--text-muted)';
+          sepLabel.style.flex = '1';
+          sepLabel.style.textAlign = 'center';
+          subTopRow.appendChild(sepLabel);
+        } else {
+          const textInput = document.createElement('input');
+          textInput.type = 'text';
+          textInput.value = subLine.text;
+          textInput.placeholder = 'e.g. {{Number}} | {{Donor}} | {{Price}}';
+          textInput.style.flex = '1';
+          textInput.addEventListener('input', () => {
+            subLine.text = textInput.value;
+            updateReceiptPaper();
+          });
+          subTopRow.appendChild(textInput);
+        }
+
+        const subRemoveBtn = document.createElement('button');
+        subRemoveBtn.className = 'remove-line-btn';
+        subRemoveBtn.textContent = '✕';
+        subRemoveBtn.addEventListener('click', () => {
+          line.subLines!.splice(subIndex, 1);
+          renderPrintPreview();
+        });
+        subTopRow.appendChild(subRemoveBtn);
+
+        subControl.appendChild(subTopRow);
+
+        if (!subLine.isSeparator) {
+          const subOptionsRow = document.createElement('div');
+          subOptionsRow.className = 'print-line-options';
+          subOptionsRow.style.paddingLeft = '30px';
+
+          const makeSubBtn = (lbl: string, isActive: boolean, onClick: () => void) => {
+            const btn = document.createElement('button');
+            btn.textContent = lbl;
+            btn.type = 'button';
+            if (isActive) btn.classList.add('active');
+            btn.addEventListener('click', onClick);
+            return btn;
+          };
+
+          subOptionsRow.appendChild(makeSubBtn('Bold', subLine.bold || false, () => {
+            subLine.bold = !subLine.bold;
+            renderPrintPreview();
+          }));
+
+          subOptionsRow.appendChild(makeSubBtn('Left', subLine.align === 'left', () => {
+            subLine.align = 'left';
+            renderPrintPreview();
+          }));
+          subOptionsRow.appendChild(makeSubBtn('Center', subLine.align === 'center', () => {
+            subLine.align = 'center';
+            renderPrintPreview();
+          }));
+          subOptionsRow.appendChild(makeSubBtn('Right', subLine.align === 'right', () => {
+            subLine.align = 'right';
+            renderPrintPreview();
+          }));
+
+          const sizes: Array<'xs' | 'small' | 'normal' | 'large' | 'xl'> = ['xl', 'large', 'normal', 'small', 'xs'];
+          sizes.forEach(sz => {
+            subOptionsRow.appendChild(makeSubBtn(sz.toUpperCase(), subLine.size === sz, () => {
+              subLine.size = sz;
+              renderPrintPreview();
+            }));
+          });
+
+          subControl.appendChild(subOptionsRow);
+        }
+
+        subLinesContainer.appendChild(subControl);
+      });
+
+      const addButtonsContainer = document.createElement('div');
+      addButtonsContainer.style.display = 'flex';
+      addButtonsContainer.style.flexWrap = 'wrap';
+      addButtonsContainer.style.gap = '6px';
+      addButtonsContainer.style.marginTop = '8px';
+      addButtonsContainer.style.paddingLeft = '15px';
+
+      const makeAddBtn = (lbl: string, onClick: () => void) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn secondary-btn';
+        btn.style.padding = '3px 8px';
+        btn.style.fontSize = '0.75rem';
+        btn.textContent = lbl;
+        btn.addEventListener('click', onClick);
+        return btn;
+      };
+
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Text', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'left', size: 'normal' });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Image', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: '', gamma: 1.0 });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add QR', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, isQr: true, gamma: 1.0 });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Barcode', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, barcodeFormat: 'code128', gamma: 1.0 });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Separator', () => {
+        line.subLines!.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+        renderPrintPreview();
+      }));
+
+      subLinesContainer.appendChild(addButtonsContainer);
+      control.appendChild(subLinesContainer);
     } else {
       const textInput = document.createElement('input');
       textInput.type = 'text';
@@ -1870,12 +2923,20 @@ addBarcodeBtn.addEventListener('click', async () => {
 });
 
 addSeparatorBtn.addEventListener('click', () => {
-  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+  printLines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
   renderPrintPreview();
 });
 
 closePrintPreview.addEventListener('click', closePrintPreviewModal);
 printPreviewCancel.addEventListener('click', closePrintPreviewModal);
+toggleInlineSchemaBtn?.addEventListener('click', () => {
+  if (inlineSchemaEditor) {
+    inlineSchemaEditor.classList.toggle('hidden');
+    if (!inlineSchemaEditor.classList.contains('hidden')) {
+      renderInlineSchemaEditor();
+    }
+  }
+});
 printPreviewModal.addEventListener('click', () => {
   // Prevent closing when clicking outside to avoid losing unsaved template changes
 });
@@ -2042,6 +3103,16 @@ printPreviewSend.addEventListener('click', async () => {
     return;
   }
 
+  if (isAuctionPrint) {
+    try {
+      await sendLinesToPrinter(await expandPrintLines(printLines));
+      closePrintPreviewModal();
+    } catch (e: any) {
+      alert(e.message);
+    }
+    return;
+  }
+
   try {
     const cardToUse = lastClickedCard || cards[0];
     const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
@@ -2082,6 +3153,17 @@ printPreviewSend.addEventListener('click', async () => {
 
 // Print using browser print dialog
 printPreviewBrowser.addEventListener('click', async () => {
+  if (isAuctionPrint) {
+    try {
+      await triggerBrowserPrint();
+      closePrintPreviewModal();
+    } catch (err: any) {
+      console.error('Browser print failed', err);
+      alert('Browser print failed: ' + err.message);
+    }
+    return;
+  }
+
   const cardToUse = lastClickedCard || cards[0];
   const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
   const title = cardToUse[titleKey] || 'Untitled Item';
@@ -2247,6 +3329,13 @@ settingsModal.addEventListener('click', (e) => {
 selectModeBtn.addEventListener('click', () => {
   isSelectMode = !isSelectMode;
   if (isSelectMode) {
+    if (isAuctionMode) {
+      isAuctionMode = false;
+      auctionModeBtn.textContent = '🏷️ Auction Mode';
+      auctionModeBtn.style.background = '';
+      auctionModeBtn.style.color = '';
+      auctionModeBar.classList.add('hidden');
+    }
     selectModeBtn.textContent = '❌ Exit Select';
     selectModeBtn.style.background = 'var(--primary-color)';
     selectModeBtn.style.color = 'white';
@@ -2260,6 +3349,44 @@ selectModeBtn.addEventListener('click', () => {
   }
   updateSelectedCountUI();
   renderCards(searchInput.value);
+});
+
+auctionModeBtn.addEventListener('click', () => {
+  isAuctionMode = !isAuctionMode;
+  if (isAuctionMode) {
+    if (isSelectMode) {
+      isSelectMode = false;
+      selectModeBtn.textContent = '☑️ Select Mode';
+      selectModeBtn.style.background = '';
+      selectModeBtn.style.color = '';
+      batchActionsBar.classList.add('hidden');
+      selectedItemIds.clear();
+    }
+    auctionModeBtn.textContent = '❌ Exit Auction';
+    auctionModeBtn.style.background = '#d97706';
+    auctionModeBtn.style.color = 'white';
+    auctionModeBar.classList.remove('hidden');
+  } else {
+    auctionModeBtn.textContent = '🏷️ Auction Mode';
+    auctionModeBtn.style.background = '';
+    auctionModeBtn.style.color = '';
+    auctionModeBar.classList.add('hidden');
+  }
+  renderCards(searchInput.value);
+});
+
+auctionResetBtn.addEventListener('click', () => {
+  if (confirm('Are you sure you want to reset the custom auction order back to default spreadsheet order?')) {
+    auctionOrder = [];
+    localStorage.removeItem('auction-card-order');
+    sortCards();
+    saveCards();
+    renderCards(searchInput.value);
+  }
+});
+
+auctionPrintBtn.addEventListener('click', async () => {
+  await printAuctionList();
 });
 
 batchSelectAllBtn.addEventListener('click', () => {
@@ -2378,31 +3505,8 @@ editTemplateBtn.addEventListener('click', async () => {
   templateVariablesPanel.classList.remove('hidden');
   importTemplateBtn.classList.remove('hidden');
   exportTemplateBtn.classList.remove('hidden');
-  templateVariablesList.innerHTML = '';
   
-  const currentSchema = schemaProfiles[activeSchemaId];
-  const itemsToRender = currentSchema 
-    ? currentSchema.variables.map(v => ({ key: v, value: sampleCard[currentSchema.mapping[v]] || '' }))
-    : Object.entries(sampleCard).map(([key, value]) => ({ key, value }));
-
-  for (const { key, value } of itemsToRender) {
-    const varTag = document.createElement('div');
-    varTag.style.background = 'rgba(255,255,255,0.1)';
-    varTag.style.padding = '4px 8px';
-    varTag.style.borderRadius = '4px';
-    varTag.style.cursor = 'pointer';
-    varTag.title = 'Click to copy';
-    varTag.innerHTML = `<strong style="color:var(--primary-color)">{{${key}}}</strong> = <span style="opacity:0.8">${String(value).substring(0, 15) + (String(value).length > 15 ? '...' : '')}</span>`;
-    
-    varTag.addEventListener('click', () => {
-      navigator.clipboard.writeText(`{{${key}}}`);
-      const oldBg = varTag.style.background;
-      varTag.style.background = 'rgba(74, 222, 128, 0.3)';
-      setTimeout(() => varTag.style.background = oldBg, 300);
-    });
-    
-    templateVariablesList.appendChild(varTag);
-  }
+  renderTemplateVariables();
   
   renderPrintPreview();
   printPreviewModal.classList.remove('hidden');
@@ -2466,7 +3570,7 @@ async function bulkPrintCards(selectedCards: CardData[], btnElement: HTMLButtonE
             if (line.size) div.classList.add('size-' + line.size);
             if (line.isSeparator) {
               div.classList.add('separator');
-              div.textContent = '- - - - - - - - - - - - - - - -';
+              div.textContent = line.text || '-------------------------';
             } else {
               div.textContent = line.text;
             }
@@ -2718,11 +3822,11 @@ testPrinterBtn.addEventListener('click', async () => {
   try {
     const testLines: PrintLine[] = [
       { enabled: true, text: 'PRINTER DIAGNOSTICS', bold: true, align: 'center', size: 'large' },
-      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
+      { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
       { enabled: true, text: `Time: ${new Date().toLocaleString()}`, bold: false, align: 'left', size: 'normal' },
       { enabled: true, text: 'Connection: Web Serial API', bold: false, align: 'left', size: 'normal' },
       { enabled: true, text: 'Status: OK', bold: false, align: 'left', size: 'normal' },
-      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
+      { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
       { enabled: true, text: 'MUNBYN', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, gamma: 1.0 },
       { enabled: true, text: 'Web Receipt Printer Ready', bold: false, align: 'center', size: 'normal' }
     ];
@@ -2786,6 +3890,7 @@ exportAppBackupBtn.addEventListener('click', () => {
     'card-preview-fields-order': localStorage.getItem('card-preview-fields-order'),
     'full-width': localStorage.getItem('full-width'),
     'grid-columns': localStorage.getItem('grid-columns'),
+    'auction-card-order': localStorage.getItem('auction-card-order'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));

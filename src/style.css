@@ -636,7 +636,7 @@ body.light-theme select option {
 
 /* Print Preview Modal */
 .modal-print-preview {
-  max-width: 960px;
+  max-width: var(--modal-max-width, 960px);
   display: flex;
   flex-direction: column;
 }
@@ -647,7 +647,7 @@ body.light-theme select option {
 
 .print-preview-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: var(--paper-column-width, 320px) 1fr;
   gap: 24px;
 }
 
@@ -754,7 +754,42 @@ body.light-theme select option {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
   border: 1px solid var(--glass-border);
-  min-width: 0;
+}
+
+/* Loop Group Cards Styling */
+.loop-group-card {
+  border: 1px dashed #fbbf24 !important;
+  background: rgba(245, 158, 11, 0.05) !important;
+  padding: 12px !important;
+}
+
+.loop-sublines-container {
+  padding-left: 15px;
+  border-left: 2px dashed rgba(245, 158, 11, 0.4);
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loop-subline-control {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: grab;
+}
+
+.loop-subline-control:active {
+  cursor: grabbing;
+}
+
+.loop-subline-control.dragging {
+  opacity: 0.4;
+  border: 1px dashed var(--primary-color);
 }
 
 .print-line-top {
@@ -968,6 +1003,22 @@ body.read-only-mode .print-controls .modal-actions {
   opacity: 0.4;
   border: 1px dashed var(--primary-color) !important;
   background: rgba(99, 102, 241, 0.1) !important;
+}
+
+/* Drag and Drop Card sorting styling */
+.card.draggable {
+  user-select: none;
+  cursor: grab;
+}
+
+.card.draggable:active {
+  cursor: grabbing;
+}
+
+.card.dragging {
+  opacity: 0.4;
+  border: 1px dashed #f59e0b !important;
+  background: rgba(245, 158, 11, 0.1) !important;
 }
 
 /* Selected Card Highlight styling */

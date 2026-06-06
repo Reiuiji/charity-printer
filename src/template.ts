@@ -34,7 +34,7 @@ export function generateDefaultTemplateLines(_card: CardData, _shortLabelFn: (k:
   const lines: PrintLine[] = [];
   lines.push({ enabled: true, text: `{{Item Name}}`, bold: true, align: 'center', size: 'large' });
   lines.push({ enabled: true, text: `Donation #{{Number}}`, bold: false, align: 'center', size: 'normal' });
-  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+  lines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
   
   lines.push({ enabled: true, text: `Donor: {{Donor}}`, bold: false, align: 'left', size: 'normal' });
   lines.push({ enabled: true, text: `Price: {{Price}}`, bold: false, align: 'left', size: 'normal' });
@@ -42,7 +42,7 @@ export function generateDefaultTemplateLines(_card: CardData, _shortLabelFn: (k:
   
   lines.push({ enabled: true, text: ``, bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: `{{Image}}`, gamma: 1.0 });
 
-  lines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+  lines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
   return lines;
 }
 
