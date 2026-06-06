@@ -229,7 +229,20 @@
               <label for="full-width-toggle">Full-Width Grid Layout</label>
               <label class="toggle-switch"><input type="checkbox" id="full-width-toggle" /><span class="toggle-slider"></span></label>
             </div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Expand the dashboard layout to fill the entire browser width (ideal for large screens).</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; margin-bottom: 15px;">Expand the dashboard layout to fill the entire browser width (ideal for large screens).</p>
+            
+            <div class="auto-sync-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="grid-columns-select">Grid Columns Count</label>
+              <select id="grid-columns-select" class="form-input" style="padding: 6px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); width: 150px; outline: none;">
+                <option value="auto" selected style="color: #000;">Auto (Responsive)</option>
+                <option value="2" style="color: #000;">2 Columns</option>
+                <option value="3" style="color: #000;">3 Columns</option>
+                <option value="4" style="color: #000;">4 Columns</option>
+                <option value="5" style="color: #000;">5 Columns</option>
+                <option value="6" style="color: #000;">6 Columns</option>
+              </select>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Force a specific number of columns on desktop (Auto flows dynamically based on width).</p>
           </div>
 
           <hr>

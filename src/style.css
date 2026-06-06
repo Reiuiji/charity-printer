@@ -391,7 +391,7 @@ body.light-theme select option {
 /* Cards Grid */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: var(--grid-columns, repeat(auto-fill, minmax(320px, 1fr)));
   gap: 20px;
 }
 
