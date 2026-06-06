@@ -30,6 +30,7 @@ let isSelectMode = false;
 let selectedItemIds: Set<string> = new Set();
 let isAuctionMode = false;
 let auctionOrder: string[] = JSON.parse(localStorage.getItem('auction-card-order') || '[]');
+let isAuctionPrint = false;
 
 // Schema Mapping
 let activeSchemaId = localStorage.getItem('activeSchemaId') || 'Charity';
@@ -1075,57 +1076,26 @@ async function printAuctionList() {
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
   lines.push({ enabled: true, text: `TOTAL ITEMS: ${cards.length}`, bold: true, align: 'center', size: 'normal' });
 
-  if (activeTransport && activeTransport.type === 'browser') {
-    await printBrowserLines(lines);
-  } else {
-    try {
-      await sendLinesToPrinter(lines);
-    } catch (err: any) {
-      alert('Print error: ' + err.message);
-    }
-  }
-}
+  // Open in print preview modal instead of immediate auto-triggered OS print
+  isAuctionPrint = true;
+  printLines = lines;
+  currentEditId = null;
+  isTemplateMode = false;
 
-async function printBrowserLines(lines: PrintLine[]) {
-  try {
-    receiptPaper.innerHTML = '';
-    
-    const container = document.createElement('div');
-    container.className = 'bulk-print-item';
-    
-    lines.forEach(line => {
-      const el = document.createElement('div');
-      
-      if (line.isSeparator) {
-        el.className = 'receipt-line separator';
-        el.textContent = line.text;
-      } else {
-        el.className = 'receipt-line';
-        if (line.align === 'center') el.classList.add('align-center');
-        if (line.align === 'right') el.classList.add('align-right');
-        if (line.bold) el.classList.add('bold');
-        if (line.size === 'xl') el.classList.add('size-xl');
-        if (line.size === 'large') el.classList.add('size-large');
-        if (line.size === 'small') el.classList.add('size-small');
-        if (line.size === 'xs') el.classList.add('size-xs');
-        el.textContent = line.text;
-      }
-      container.appendChild(el);
-    });
-    
-    receiptPaper.appendChild(container);
-    
-    currentEditId = null;
-    isTemplateMode = false;
-    printPreviewModal.classList.remove('hidden');
-    
-    await new Promise(r => setTimeout(r, 100));
-    await triggerBrowserPrint();
-    
-    closePrintPreviewModal();
-  } catch (err: any) {
-    alert('Browser print error: ' + err.message);
-  }
+  renderPrintPreview();
+
+  const modalContent = printPreviewModal.querySelector('.modal-content') as HTMLElement;
+  const previewLayout = printPreviewModal.querySelector('.print-preview-layout') as HTMLElement;
+  if (modalContent) modalContent.classList.add('compact');
+  if (previewLayout) previewLayout.classList.add('no-controls');
+
+  printPreviewSend.textContent = '🖨️ Print List';
+  printPreviewBrowser.classList.remove('hidden');
+  templateVariablesPanel.classList.add('hidden');
+  importTemplateBtn.classList.add('hidden');
+  exportTemplateBtn.classList.add('hidden');
+
+  printPreviewModal.classList.remove('hidden');
 }
 
 schemaProfileSelect?.addEventListener('change', (e) => {
@@ -1798,10 +1768,16 @@ function closePrintPreviewModal() {
   printPreviewModal.classList.add('hidden');
   currentEditId = null;
   isTemplateMode = false;
+  isAuctionPrint = false;
+
+  const modalContent = printPreviewModal.querySelector('.modal-content') as HTMLElement;
+  const previewLayout = printPreviewModal.querySelector('.print-preview-layout') as HTMLElement;
+  if (modalContent) modalContent.classList.remove('compact');
+  if (previewLayout) previewLayout.classList.remove('no-controls');
 }
 
 function updateReceiptPaper() {
-  savePrintTemplate();
+  if (!isAuctionPrint) savePrintTemplate();
   // Render receipt paper
   receiptPaper.innerHTML = '';
   printLines.forEach((line, index) => {
@@ -2368,6 +2344,16 @@ printPreviewSend.addEventListener('click', async () => {
     return;
   }
 
+  if (isAuctionPrint) {
+    try {
+      await sendLinesToPrinter(printLines);
+      closePrintPreviewModal();
+    } catch (e: any) {
+      alert(e.message);
+    }
+    return;
+  }
+
   try {
     const cardToUse = lastClickedCard || cards[0];
     const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
@@ -2408,6 +2394,17 @@ printPreviewSend.addEventListener('click', async () => {
 
 // Print using browser print dialog
 printPreviewBrowser.addEventListener('click', async () => {
+  if (isAuctionPrint) {
+    try {
+      await triggerBrowserPrint();
+      closePrintPreviewModal();
+    } catch (err: any) {
+      console.error('Browser print failed', err);
+      alert('Browser print failed: ' + err.message);
+    }
+    return;
+  }
+
   const cardToUse = lastClickedCard || cards[0];
   const titleKey = Object.keys(cardToUse).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(cardToUse)[0];
   const title = cardToUse[titleKey] || 'Untitled Item';
