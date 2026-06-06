@@ -188,6 +188,10 @@ function applyBrowserPrintSettings() {
 
 // Initialization
 function init() {
+  // Inject build-time version info into the footer
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = `V${__APP_VERSION__} (${__COMMIT_HASH__})`;
+
   const urlParams = new URLSearchParams(window.location.search);
   const sheetParam = urlParams.get('sheet');
   const autoSyncParam = urlParams.get('autoSync');
