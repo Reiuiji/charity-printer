@@ -219,11 +219,15 @@ function applyBrowserPrintSettings() {
   const scale = localStorage.getItem('browser-print-scale') || '100%';
   const imgWidth = localStorage.getItem('browser-image-width') || '80%';
   
-  const width = paperSize === '58mm' ? '200px' : '280px';
+  const width = paperSize === '58mm' ? '200px' : paperSize === 'letter' ? '640px' : '280px';
+  const columnWidth = paperSize === '58mm' ? '240px' : paperSize === 'letter' ? '680px' : '320px';
+  const modalMaxWidth = paperSize === 'letter' ? '1280px' : '960px';
   const baseFontSize = 13 * (parseFloat(scale) / 100);
   
   const root = document.documentElement;
   root.style.setProperty('--paper-width', width);
+  root.style.setProperty('--paper-column-width', columnWidth);
+  root.style.setProperty('--modal-max-width', modalMaxWidth);
   root.style.setProperty('--paper-font-size', baseFontSize + 'px');
   root.style.setProperty('--print-image-width', imgWidth);
 }
@@ -904,27 +908,44 @@ function renderInlineSchemaEditor() {
 
 function getDefaultAuctionLoopPattern(): string {
   const currentSchema = schemaProfiles[activeSchemaId];
-  if (!currentSchema) return '{{Number}} | {{Donor}} | {{Price}}';
+  if (!currentSchema) return '{{Item ID}} | {{Item Name}} | {{Price}}';
   
   let col1Var = currentSchema.variables.find(v => {
     const name = v.toLowerCase();
-    const mapped = (currentSchema.mapping[v] || '').toLowerCase();
-    return name === 'id' || name === 'number' || name.includes('donation') || mapped.includes('id') || mapped.includes('donation') || mapped === 'donation #';
+    return name === 'item id' || name === 'id';
   });
-  if (!col1Var) col1Var = currentSchema.variables.find(v => v.toLowerCase().includes('id')) || currentSchema.variables[0] || 'Number';
+  if (!col1Var) {
+    col1Var = currentSchema.variables.find(v => {
+      const name = v.toLowerCase();
+      const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+      return name === 'number' || name.includes('donation') || mapped.includes('id') || mapped.includes('donation') || mapped === 'donation #';
+    });
+  }
+  if (!col1Var) col1Var = currentSchema.variables.find(v => v.toLowerCase().includes('id')) || currentSchema.variables[0] || 'Item ID';
 
   let col2Var = currentSchema.variables.find(v => {
     const name = v.toLowerCase();
-    const mapped = (currentSchema.mapping[v] || '').toLowerCase();
-    return name === 'donor' || name === 'community' || name.includes('name') || mapped.includes('donor') || mapped.includes('community') || mapped.includes('name');
+    return name === 'item name' || name === 'name';
   });
-  if (!col2Var) col2Var = currentSchema.variables.find(v => v.toLowerCase().includes('name') || v.toLowerCase().includes('donor')) || currentSchema.variables[1] || 'Donor';
+  if (!col2Var) {
+    col2Var = currentSchema.variables.find(v => {
+      const name = v.toLowerCase();
+      const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+      return name === 'donor' || name === 'community' || mapped.includes('donor') || mapped.includes('community') || mapped.includes('name');
+    });
+  }
+  if (!col2Var) col2Var = currentSchema.variables.find(v => v.toLowerCase().includes('name') || v.toLowerCase().includes('donor')) || currentSchema.variables[1] || 'Item Name';
 
   let col3Var = currentSchema.variables.find(v => {
     const name = v.toLowerCase();
-    const mapped = (currentSchema.mapping[v] || '').toLowerCase();
-    return name === 'price' || name === 'bid' || mapped.includes('price') || mapped.includes('bid');
+    return name === 'price' || name === 'bid';
   });
+  if (!col3Var) {
+    col3Var = currentSchema.variables.find(v => {
+      const mapped = (currentSchema.mapping[v] || '').toLowerCase();
+      return mapped.includes('price') || mapped.includes('bid');
+    });
+  }
   if (!col3Var) col3Var = currentSchema.variables.find(v => v.toLowerCase().includes('price') || v.toLowerCase().includes('bid')) || currentSchema.variables[3] || 'Price';
 
   return `{{${col1Var}}} | {{${col2Var}}} | {{${col3Var}}}`;
@@ -1133,12 +1154,12 @@ function formatAuctionColumns(col1: string, col2: string, col3: string, totalWid
 
 async function printAuctionList() {
   const paperWidthSetting = browserPaperSize.value || '80mm';
-  const totalWidth = paperWidthSetting === '58mm' ? 32 : 40;
+  const totalWidth = paperWidthSetting === '58mm' ? 32 : paperWidthSetting === 'letter' ? 80 : 40;
 
   const lines: PrintLine[] = [];
 
   lines.push({ enabled: true, text: 'AUCTION ITEMS ORDER', bold: true, align: 'center', size: 'large' });
-  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
+  lines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
 
   // Dynamically generate the default header text from loop variables
   const loopPattern = getDefaultAuctionLoopPattern();
@@ -1171,16 +1192,17 @@ async function printAuctionList() {
     enabled: true,
     text: 'Auction Loop Group',
     bold: false,
-    align: 'left',
+    align: 'center',
     size: 'normal',
     isLoop: true,
-    loopHeader: { enabled: true, text: headerText, bold: true, align: 'left', size: 'normal' },
+    loopHeader: { enabled: true, text: headerText, bold: true, align: 'center', size: 'xs' },
+    loopHeaderSeparator: { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true },
     subLines: [
-      { enabled: true, text: loopPattern, bold: false, align: 'left', size: 'normal' }
+      { enabled: true, text: loopPattern, bold: false, align: 'center', size: 'xs' }
     ]
   });
 
-  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
+  lines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true });
   lines.push({ enabled: true, text: 'TOTAL ITEMS: {TOTAL}', bold: true, align: 'center', size: 'normal' });
 
   // Open in print preview modal instead of immediate auto-triggered OS print
@@ -1888,7 +1910,7 @@ function formatTwoColumns(col1: string, col2: string, totalWidth: number): strin
 async function expandPrintLines(lines: PrintLine[]): Promise<PrintLine[]> {
   const expanded: PrintLine[] = [];
   const paperWidthSetting = browserPaperSize.value || '80mm';
-  const totalWidth = paperWidthSetting === '58mm' ? 32 : 40;
+  const totalWidth = paperWidthSetting === '58mm' ? 32 : paperWidthSetting === 'letter' ? 80 : 40;
 
   const currentSchema = schemaProfiles[activeSchemaId];
 
@@ -1897,17 +1919,32 @@ async function expandPrintLines(lines: PrintLine[]): Promise<PrintLine[]> {
 
     if (line.isLoop) {
       if (line.loopHeader && line.loopHeader.enabled) {
+        let headerTextVal = line.loopHeader.text;
+        if (headerTextVal.includes('|')) {
+          const parts = headerTextVal.split('|').map(p => p.trim());
+          if (parts.length === 3) {
+            headerTextVal = formatAuctionColumns(parts[0], parts[1], parts[2], totalWidth);
+          } else if (parts.length === 2) {
+            headerTextVal = formatTwoColumns(parts[0], parts[1], totalWidth);
+          }
+        }
         expanded.push({
-          ...line.loopHeader
+          ...line.loopHeader,
+          text: headerTextVal
         });
-        expanded.push({
+        const sep = line.loopHeaderSeparator || {
           enabled: true,
-          text: '-'.repeat(totalWidth),
+          text: '-------------------------',
           bold: false,
           align: 'center',
           size: 'normal',
           isSeparator: true
-        });
+        };
+        if (sep.enabled) {
+          expanded.push({
+            ...sep
+          });
+        }
       }
       const subLines = line.subLines || [];
 
@@ -2254,7 +2291,7 @@ function renderPrintPreview() {
       topRow.appendChild(removeBtn);
 
       if (!line.loopHeader) {
-        line.loopHeader = { enabled: true, text: 'Num  Donor                  Price', bold: true, align: 'left', size: 'normal' };
+        line.loopHeader = { enabled: true, text: 'ID | Item | Price', bold: true, align: 'center', size: 'xs' };
       }
 
       const loopHeaderContainer = document.createElement('div');
@@ -2341,6 +2378,85 @@ function renderPrintPreview() {
 
       loopHeaderContainer.appendChild(headerOptionsRow);
       control.appendChild(loopHeaderContainer);
+
+      if (!line.loopHeaderSeparator) {
+        line.loopHeaderSeparator = { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'normal', isSeparator: true };
+      }
+
+      const loopSepContainer = document.createElement('div');
+      loopSepContainer.style.background = 'rgba(255,255,255,0.03)';
+      loopSepContainer.style.border = '1px dashed rgba(255,255,255,0.08)';
+      loopSepContainer.style.borderRadius = '6px';
+      loopSepContainer.style.padding = '8px';
+      loopSepContainer.style.marginTop = '8px';
+      loopSepContainer.style.display = 'flex';
+      loopSepContainer.style.flexDirection = 'column';
+      loopSepContainer.style.gap = '6px';
+
+      const sepTopRow = document.createElement('div');
+      sepTopRow.className = 'print-line-top';
+
+      const sepLabel = document.createElement('span');
+      sepLabel.textContent = '〰️ Line Break:';
+      sepLabel.style.fontSize = '0.8rem';
+      sepLabel.style.color = '#10b981';
+      sepLabel.style.fontWeight = 'bold';
+      sepLabel.style.marginRight = '5px';
+
+      const sepCheckbox = document.createElement('input');
+      sepCheckbox.type = 'checkbox';
+      sepCheckbox.checked = line.loopHeaderSeparator.enabled;
+      sepCheckbox.addEventListener('change', () => {
+        line.loopHeaderSeparator!.enabled = sepCheckbox.checked;
+        updateReceiptPaper();
+      });
+
+      const sepTextInput = document.createElement('input');
+      sepTextInput.type = 'text';
+      sepTextInput.value = line.loopHeaderSeparator.text;
+      sepTextInput.placeholder = 'e.g. --------------------------------';
+      sepTextInput.style.flex = '1';
+      sepTextInput.addEventListener('input', () => {
+        line.loopHeaderSeparator!.text = sepTextInput.value;
+        updateReceiptPaper();
+      });
+
+      sepTopRow.appendChild(sepLabel);
+      sepTopRow.appendChild(sepCheckbox);
+      sepTopRow.appendChild(sepTextInput);
+      loopSepContainer.appendChild(sepTopRow);
+
+      const sepOptionsRow = document.createElement('div');
+      sepOptionsRow.className = 'print-line-options';
+      sepOptionsRow.style.paddingLeft = '30px';
+
+      sepOptionsRow.appendChild(makeHeaderBtn('Bold', line.loopHeaderSeparator.bold || false, () => {
+        line.loopHeaderSeparator!.bold = !line.loopHeaderSeparator!.bold;
+        renderPrintPreview();
+      }));
+
+      sepOptionsRow.appendChild(makeHeaderBtn('Left', line.loopHeaderSeparator.align === 'left', () => {
+        line.loopHeaderSeparator!.align = 'left';
+        renderPrintPreview();
+      }));
+      sepOptionsRow.appendChild(makeHeaderBtn('Center', line.loopHeaderSeparator.align === 'center', () => {
+        line.loopHeaderSeparator!.align = 'center';
+        renderPrintPreview();
+      }));
+      sepOptionsRow.appendChild(makeHeaderBtn('Right', line.loopHeaderSeparator.align === 'right', () => {
+        line.loopHeaderSeparator!.align = 'right';
+        renderPrintPreview();
+      }));
+
+      headerSizes.forEach(sz => {
+        sepOptionsRow.appendChild(makeHeaderBtn(sz.toUpperCase(), line.loopHeaderSeparator!.size === sz, () => {
+          line.loopHeaderSeparator!.size = sz;
+          renderPrintPreview();
+        }));
+      });
+
+      loopSepContainer.appendChild(sepOptionsRow);
+      control.appendChild(loopSepContainer);
 
       if (!line.subLines) {
         line.subLines = [];
@@ -2640,7 +2756,7 @@ function renderPrintPreview() {
         renderPrintPreview();
       }));
       addButtonsContainer.appendChild(makeAddBtn('➕ Add Separator', () => {
-        line.subLines!.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+        line.subLines!.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
         renderPrintPreview();
       }));
 
@@ -2807,7 +2923,7 @@ addBarcodeBtn.addEventListener('click', async () => {
 });
 
 addSeparatorBtn.addEventListener('click', () => {
-  printLines.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+  printLines.push({ enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
   renderPrintPreview();
 });
 
@@ -3454,7 +3570,7 @@ async function bulkPrintCards(selectedCards: CardData[], btnElement: HTMLButtonE
             if (line.size) div.classList.add('size-' + line.size);
             if (line.isSeparator) {
               div.classList.add('separator');
-              div.textContent = '- - - - - - - - - - - - - - - -';
+              div.textContent = line.text || '-------------------------';
             } else {
               div.textContent = line.text;
             }
@@ -3706,11 +3822,11 @@ testPrinterBtn.addEventListener('click', async () => {
   try {
     const testLines: PrintLine[] = [
       { enabled: true, text: 'PRINTER DIAGNOSTICS', bold: true, align: 'center', size: 'large' },
-      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
+      { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
       { enabled: true, text: `Time: ${new Date().toLocaleString()}`, bold: false, align: 'left', size: 'normal' },
       { enabled: true, text: 'Connection: Web Serial API', bold: false, align: 'left', size: 'normal' },
       { enabled: true, text: 'Status: OK', bold: false, align: 'left', size: 'normal' },
-      { enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
+      { enabled: true, text: '-------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true },
       { enabled: true, text: 'MUNBYN', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, gamma: 1.0 },
       { enabled: true, text: 'Web Receipt Printer Ready', bold: false, align: 'center', size: 'normal' }
     ];

@@ -636,7 +636,7 @@ body.light-theme select option {
 
 /* Print Preview Modal */
 .modal-print-preview {
-  max-width: 960px;
+  max-width: var(--modal-max-width, 960px);
   display: flex;
   flex-direction: column;
 }
@@ -647,7 +647,7 @@ body.light-theme select option {
 
 .print-preview-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: var(--paper-column-width, 320px) 1fr;
   gap: 24px;
 }
 
