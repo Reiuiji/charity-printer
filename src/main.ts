@@ -28,6 +28,8 @@ let lastClickedCard: CardData | null = null;
 let selectedPreviewFields: string[] = JSON.parse(localStorage.getItem('card-preview-fields') || '[]');
 let isSelectMode = false;
 let selectedItemIds: Set<string> = new Set();
+let isAuctionMode = false;
+let auctionOrder: string[] = JSON.parse(localStorage.getItem('auction-card-order') || '[]');
 
 // Schema Mapping
 let activeSchemaId = localStorage.getItem('activeSchemaId') || 'Charity';
@@ -100,7 +102,11 @@ const customIdNext = document.getElementById('custom-id-next') as HTMLInputEleme
 const createCustomReceiptBtn = document.getElementById('create-custom-receipt-btn') as HTMLButtonElement;
 const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
 const selectModeBtn = document.getElementById('select-mode-btn') as HTMLButtonElement;
+const auctionModeBtn = document.getElementById('auction-mode-btn') as HTMLButtonElement;
 const batchActionsBar = document.getElementById('batch-actions-bar') as HTMLDivElement;
+const auctionModeBar = document.getElementById('auction-mode-bar') as HTMLDivElement;
+const auctionResetBtn = document.getElementById('auction-reset-btn') as HTMLButtonElement;
+const auctionPrintBtn = document.getElementById('auction-print-btn') as HTMLButtonElement;
 const selectedCount = document.getElementById('selected-count') as HTMLSpanElement;
 const batchSelectAllBtn = document.getElementById('batch-select-all-btn') as HTMLButtonElement;
 const batchClearBtn = document.getElementById('batch-clear-btn') as HTMLButtonElement;
@@ -242,6 +248,22 @@ function applyGridColumns() {
   }
 }
 
+function sortCards() {
+  const orderMap = new Map(auctionOrder.map((id, index) => [id, index]));
+  cards.sort((a, b) => {
+    const aIndex = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
+    const bIndex = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
+    
+    if (aIndex !== bIndex) {
+      return aIndex - bIndex;
+    }
+    
+    const aOrig = a.originalIndex !== undefined ? Number(a.originalIndex) : 999999;
+    const bOrig = b.originalIndex !== undefined ? Number(b.originalIndex) : 999999;
+    return aOrig - bOrig;
+  });
+}
+
 // Initialization
 function init() {
   // Inject build-time version info into the footer
@@ -277,6 +299,10 @@ function init() {
   const savedCards = localStorage.getItem('cards-data');
   if (savedCards) {
     cards = JSON.parse(savedCards);
+    cards.forEach((c, idx) => {
+      if (c.originalIndex === undefined) c.originalIndex = String(idx);
+    });
+    sortCards();
     initializeDefaultPreviewFields();
     renderCards();
   }
@@ -284,6 +310,7 @@ function init() {
   renderSchemaMapper();
   renderCardPreviewFieldsSettings();
   initDragAndDrop();
+  initCardDragAndDrop();
 
   const syncTime = localStorage.getItem('last-sync');
   if (syncTime) {
@@ -472,9 +499,10 @@ async function fetchData() {
 
         cards = validCards.map((item, index) => {
           const existingId = item['Donation #'] || item['id'] || item['ID'] || `item-${Date.now()}-${index}`;
-          return { ...item, id: existingId };
+          return { ...item, id: existingId, originalIndex: String(index) };
         });
 
+        sortCards();
         saveCards();
         initializeDefaultPreviewFields();
         renderCards();
@@ -809,6 +837,185 @@ function saveNewFieldsOrder() {
   renderCards(searchInput.value);
 }
 
+function initCardDragAndDrop() {
+  if (!cardsContainer) return;
+
+  cardsContainer.addEventListener('dragstart', (e) => {
+    if (!isAuctionMode) return;
+    const target = e.target as HTMLElement;
+    const cardEl = target.closest('.card') as HTMLElement;
+    if (cardEl) {
+      cardEl.classList.add('dragging');
+      e.dataTransfer?.setData('text/plain', cardEl.dataset.id || '');
+    }
+  });
+
+  cardsContainer.addEventListener('dragend', (e) => {
+    if (!isAuctionMode) return;
+    const target = e.target as HTMLElement;
+    const cardEl = target.closest('.card') as HTMLElement;
+    if (cardEl) {
+      cardEl.classList.remove('dragging');
+    }
+    saveNewCardOrder();
+  });
+
+  cardsContainer.addEventListener('dragover', (e) => {
+    if (!isAuctionMode) return;
+    e.preventDefault();
+    const draggingEl = cardsContainer.querySelector('.card.dragging') as HTMLElement;
+    if (!draggingEl) return;
+
+    const closestCard = getClosestCard(cardsContainer, e.clientX, e.clientY);
+    if (!closestCard) {
+      cardsContainer.appendChild(draggingEl);
+      return;
+    }
+
+    const box = closestCard.getBoundingClientRect();
+    const isAfter = e.clientX > box.left + box.width / 2;
+    if (isAfter) {
+      closestCard.parentNode?.insertBefore(draggingEl, closestCard.nextSibling);
+    } else {
+      closestCard.parentNode?.insertBefore(draggingEl, closestCard);
+    }
+  });
+}
+
+function getClosestCard(container: HTMLElement, x: number, y: number): HTMLElement | null {
+  const cardsList = [...container.querySelectorAll('.card:not(.dragging)')] as HTMLElement[];
+  if (cardsList.length === 0) return null;
+  
+  return cardsList.reduce<{ distance: number; element: HTMLElement | null }>((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const centerX = box.left + box.width / 2;
+    const centerY = box.top + box.height / 2;
+    const distance = Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2);
+    
+    if (distance < closest.distance) {
+      return { distance: distance, element: child };
+    }
+    return closest;
+  }, { distance: Number.POSITIVE_INFINITY, element: null }).element;
+}
+
+function saveNewCardOrder() {
+  const cardElements = [...cardsContainer.querySelectorAll('.card')] as HTMLElement[];
+  const newOrderIds = cardElements.map(el => el.dataset.id || '');
+  
+  const cardMap = new Map(cards.map(c => [c.id, c]));
+  const reorderedCards: CardData[] = [];
+  
+  newOrderIds.forEach(id => {
+    if (cardMap.has(id)) {
+      reorderedCards.push(cardMap.get(id)!);
+    }
+  });
+  
+  cards.forEach(c => {
+    if (!newOrderIds.includes(c.id)) {
+      reorderedCards.push(c);
+    }
+  });
+  
+  cards = reorderedCards;
+  auctionOrder = cards.map(c => c.id);
+  localStorage.setItem('auction-card-order', JSON.stringify(auctionOrder));
+  saveCards();
+}
+
+function formatAuctionColumns(col1: string, col2: string, col3: string, totalWidth: number): string {
+  const c1 = col1.substring(0, 4).padEnd(4, ' ');
+  const c3 = col3.substring(0, 7).padStart(7, ' ');
+  const middleWidth = totalWidth - c1.length - c3.length - 2; // 2 spaces buffer
+  const c2 = col2.substring(0, middleWidth).padEnd(middleWidth, ' ');
+  return `${c1} ${c2} ${c3}`;
+}
+
+async function printAuctionList() {
+  const paperWidthSetting = browserPaperSize.value || '80mm';
+  const totalWidth = paperWidthSetting === '58mm' ? 32 : 40;
+
+  const lines: PrintLine[] = [];
+
+  lines.push({ enabled: true, text: 'AUCTION ITEMS ORDER', bold: true, align: 'center', size: 'large' });
+  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
+
+  const colHeader = formatAuctionColumns('#', 'Item Name', 'Bid', totalWidth);
+  lines.push({ enabled: true, text: colHeader, bold: true, align: 'left', size: 'normal' });
+  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
+
+  cards.forEach((card) => {
+    const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
+    const title = card[titleKey] || 'Untitled Item';
+    const donationNum = card['Donation #'] || card.id;
+
+    const bidKey = Object.keys(card).find(k => k.toLowerCase().includes('starting bid') || k.toLowerCase().includes('bid') || k.toLowerCase().includes('price')) || '';
+    let bid = bidKey ? card[bidKey] || '0' : '0';
+    if (bid && !bid.startsWith('$') && !isNaN(Number(bid))) {
+      bid = `$${bid}`;
+    }
+
+    const itemRow = formatAuctionColumns(donationNum.toString(), title, bid, totalWidth);
+    lines.push({ enabled: true, text: itemRow, bold: false, align: 'left', size: 'normal' });
+  });
+
+  lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
+  lines.push({ enabled: true, text: `TOTAL ITEMS: ${cards.length}`, bold: true, align: 'center', size: 'normal' });
+
+  if (activeTransport && activeTransport.type === 'browser') {
+    await printBrowserLines(lines);
+  } else {
+    try {
+      await sendLinesToPrinter(lines);
+    } catch (err: any) {
+      alert('Print error: ' + err.message);
+    }
+  }
+}
+
+async function printBrowserLines(lines: PrintLine[]) {
+  try {
+    receiptPaper.innerHTML = '';
+    
+    const container = document.createElement('div');
+    container.className = 'bulk-print-item';
+    
+    lines.forEach(line => {
+      const el = document.createElement('div');
+      
+      if (line.isSeparator) {
+        el.className = 'receipt-line separator';
+        el.textContent = line.text;
+      } else {
+        el.className = 'receipt-line';
+        if (line.align === 'center') el.classList.add('align-center');
+        if (line.align === 'right') el.classList.add('align-right');
+        if (line.bold) el.classList.add('bold');
+        if (line.size === 'xl') el.classList.add('size-xl');
+        if (line.size === 'large') el.classList.add('size-large');
+        if (line.size === 'small') el.classList.add('size-small');
+        if (line.size === 'xs') el.classList.add('size-xs');
+        el.textContent = line.text;
+      }
+      container.appendChild(el);
+    });
+    
+    receiptPaper.appendChild(container);
+    
+    currentEditId = null;
+    isTemplateMode = false;
+    printPreviewModal.classList.remove('hidden');
+    
+    await new Promise(r => setTimeout(r, 100));
+    await triggerBrowserPrint();
+    
+    closePrintPreviewModal();
+  } catch (err: any) {
+    alert('Browser print error: ' + err.message);
+  }
+}
+
 schemaProfileSelect?.addEventListener('change', (e) => {
   activeSchemaId = (e.target as HTMLSelectElement).value;
   saveSchemaProfiles();
@@ -959,7 +1166,12 @@ function renderCards(filterText = '') {
 
   filtered.forEach(card => {
     const cardEl = document.createElement('div');
-    cardEl.className = 'card';
+    if (isAuctionMode) {
+      cardEl.className = 'card draggable';
+      cardEl.setAttribute('draggable', 'true');
+    } else {
+      cardEl.className = 'card';
+    }
     cardEl.dataset.id = card.id;
 
     // Try to find a title field
@@ -1087,6 +1299,8 @@ function renderCards(filterText = '') {
           cardEl.classList.remove('selected');
         }
         updateSelectedCountUI();
+      } else if (isAuctionMode) {
+        // Do nothing on click in auction mode to prevent accidental modal openings during drag actions
       } else {
         openPreviewModal(id);
       }
@@ -2247,6 +2461,13 @@ settingsModal.addEventListener('click', (e) => {
 selectModeBtn.addEventListener('click', () => {
   isSelectMode = !isSelectMode;
   if (isSelectMode) {
+    if (isAuctionMode) {
+      isAuctionMode = false;
+      auctionModeBtn.textContent = '🏷️ Auction Mode';
+      auctionModeBtn.style.background = '';
+      auctionModeBtn.style.color = '';
+      auctionModeBar.classList.add('hidden');
+    }
     selectModeBtn.textContent = '❌ Exit Select';
     selectModeBtn.style.background = 'var(--primary-color)';
     selectModeBtn.style.color = 'white';
@@ -2260,6 +2481,44 @@ selectModeBtn.addEventListener('click', () => {
   }
   updateSelectedCountUI();
   renderCards(searchInput.value);
+});
+
+auctionModeBtn.addEventListener('click', () => {
+  isAuctionMode = !isAuctionMode;
+  if (isAuctionMode) {
+    if (isSelectMode) {
+      isSelectMode = false;
+      selectModeBtn.textContent = '☑️ Select Mode';
+      selectModeBtn.style.background = '';
+      selectModeBtn.style.color = '';
+      batchActionsBar.classList.add('hidden');
+      selectedItemIds.clear();
+    }
+    auctionModeBtn.textContent = '❌ Exit Auction';
+    auctionModeBtn.style.background = '#d97706';
+    auctionModeBtn.style.color = 'white';
+    auctionModeBar.classList.remove('hidden');
+  } else {
+    auctionModeBtn.textContent = '🏷️ Auction Mode';
+    auctionModeBtn.style.background = '';
+    auctionModeBtn.style.color = '';
+    auctionModeBar.classList.add('hidden');
+  }
+  renderCards(searchInput.value);
+});
+
+auctionResetBtn.addEventListener('click', () => {
+  if (confirm('Are you sure you want to reset the custom auction order back to default spreadsheet order?')) {
+    auctionOrder = [];
+    localStorage.removeItem('auction-card-order');
+    sortCards();
+    saveCards();
+    renderCards(searchInput.value);
+  }
+});
+
+auctionPrintBtn.addEventListener('click', async () => {
+  await printAuctionList();
 });
 
 batchSelectAllBtn.addEventListener('click', () => {
@@ -2786,6 +3045,7 @@ exportAppBackupBtn.addEventListener('click', () => {
     'card-preview-fields-order': localStorage.getItem('card-preview-fields-order'),
     'full-width': localStorage.getItem('full-width'),
     'grid-columns': localStorage.getItem('grid-columns'),
+    'auction-card-order': localStorage.getItem('auction-card-order'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));

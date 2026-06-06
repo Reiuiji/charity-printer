@@ -36,6 +36,7 @@
               </div>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn secondary-btn" id="auction-mode-btn">🏷️ Auction Mode</button>
               <button class="btn secondary-btn" id="select-mode-btn">☑️ Select Mode</button>
               <button class="btn secondary-btn hidden" id="create-custom-receipt-btn">➕ Add Item</button>
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
@@ -51,6 +52,14 @@
             <button class="btn secondary-btn" id="batch-mark-printed-btn" style="padding: 6px 12px; font-size: 0.85rem; color: var(--secondary-color); border-color: rgba(16, 185, 129, 0.4);">✓ Mark Printed</button>
             <button class="btn secondary-btn" id="batch-mark-unprinted-btn" style="padding: 6px 12px; font-size: 0.85rem; color: var(--danger-color); border-color: rgba(239, 68, 68, 0.4);">↺ Mark Unprinted</button>
             <button class="btn print-btn" id="batch-print-btn" style="padding: 6px 14px; font-size: 0.85rem; margin-left: auto;">🖨️ Print Selected</button>
+          </div>
+
+          <!-- Auction Mode Bar -->
+          <div id="auction-mode-bar" class="hidden glass-panel" style="display: flex; gap: 12px; align-items: center; padding: 12px 20px; border-radius: 12px; flex-wrap: wrap; margin-bottom: 20px; border-color: rgba(245, 158, 11, 0.4);">
+            <span style="font-weight: 600; font-size: 0.95rem; color: #fbbf24; margin-right: 10px;">🏷️ Auction Sort Mode Active</span>
+            <span style="font-size: 0.85rem; color: var(--text-muted); flex-grow: 1;">Drag cards directly to rearrange the auction sequence.</span>
+            <button class="btn secondary-btn" id="auction-reset-btn" style="padding: 6px 12px; font-size: 0.85rem;">Reset Order</button>
+            <button class="btn print-btn" id="auction-print-btn" style="padding: 6px 14px; font-size: 0.85rem; background-color: #d97706; border-color: #b45309; margin-left: auto;">🖨️ Print Auction List</button>
           </div>
 
           <div id="cards-container" class="cards-grid">
