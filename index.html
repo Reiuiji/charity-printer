@@ -259,6 +259,36 @@
 
           <hr>
 
+          <!-- Auction Print Customization -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">🏷️ Auction List Columns</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
+              Select which CSV columns correspond to each column of the printed auction list.
+            </p>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 120px; display: flex; flex-direction: column; gap: 5px;">
+                <label for="auction-col1-select" style="font-size: 0.85rem; color: var(--text-muted);">Column 1 (Left):</label>
+                <select id="auction-col1-select" class="form-input" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+                  <option value="" style="color: #000;">No data loaded</option>
+                </select>
+              </div>
+              <div style="flex: 2; min-width: 180px; display: flex; flex-direction: column; gap: 5px;">
+                <label for="auction-col2-select" style="font-size: 0.85rem; color: var(--text-muted);">Column 2 (Center):</label>
+                <select id="auction-col2-select" class="form-input" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+                  <option value="" style="color: #000;">No data loaded</option>
+                </select>
+              </div>
+              <div style="flex: 1; min-width: 120px; display: flex; flex-direction: column; gap: 5px;">
+                <label for="auction-col3-select" style="font-size: 0.85rem; color: var(--text-muted);">Column 3 (Right):</label>
+                <select id="auction-col3-select" class="form-input" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+                  <option value="" style="color: #000;">No data loaded</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+
           <!-- Automation -->
           <div class="settings-section">
             <h3 style="margin-bottom: 10px;">⚙️ Automation</h3>

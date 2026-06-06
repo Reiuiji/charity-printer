@@ -107,6 +107,9 @@ const batchActionsBar = document.getElementById('batch-actions-bar') as HTMLDivE
 const auctionModeBar = document.getElementById('auction-mode-bar') as HTMLDivElement;
 const auctionResetBtn = document.getElementById('auction-reset-btn') as HTMLButtonElement;
 const auctionPrintBtn = document.getElementById('auction-print-btn') as HTMLButtonElement;
+const auctionCol1Select = document.getElementById('auction-col1-select') as HTMLSelectElement;
+const auctionCol2Select = document.getElementById('auction-col2-select') as HTMLSelectElement;
+const auctionCol3Select = document.getElementById('auction-col3-select') as HTMLSelectElement;
 const selectedCount = document.getElementById('selected-count') as HTMLSpanElement;
 const batchSelectAllBtn = document.getElementById('batch-select-all-btn') as HTMLButtonElement;
 const batchClearBtn = document.getElementById('batch-clear-btn') as HTMLButtonElement;
@@ -309,6 +312,7 @@ function init() {
   
   renderSchemaMapper();
   renderCardPreviewFieldsSettings();
+  renderAuctionColumnsSettings();
   initDragAndDrop();
   initCardDragAndDrop();
 
@@ -508,6 +512,7 @@ async function fetchData() {
         renderCards();
         renderSchemaMapper();
         renderCardPreviewFieldsSettings();
+        renderAuctionColumnsSettings();
         
         const now = new Date().toISOString();
         localStorage.setItem('last-sync', now);
@@ -764,6 +769,89 @@ function renderCardPreviewFieldsSettings() {
   });
 }
 
+function renderAuctionColumnsSettings() {
+  if (!auctionCol1Select || !auctionCol2Select || !auctionCol3Select) return;
+
+  auctionCol1Select.innerHTML = '';
+  auctionCol2Select.innerHTML = '';
+  auctionCol3Select.innerHTML = '';
+
+  if (cards.length === 0) {
+    const opt1 = document.createElement('option');
+    opt1.textContent = 'No data loaded';
+    opt1.value = '';
+    opt1.style.color = '#000';
+    auctionCol1Select.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.textContent = 'No data loaded';
+    opt2.value = '';
+    opt2.style.color = '#000';
+    auctionCol2Select.appendChild(opt2);
+
+    const opt3 = document.createElement('option');
+    opt3.textContent = 'No data loaded';
+    opt3.value = '';
+    opt3.style.color = '#000';
+    auctionCol3Select.appendChild(opt3);
+
+    auctionCol1Select.disabled = true;
+    auctionCol2Select.disabled = true;
+    auctionCol3Select.disabled = true;
+    return;
+  }
+
+  auctionCol1Select.disabled = false;
+  auctionCol2Select.disabled = false;
+  auctionCol3Select.disabled = false;
+
+  const headers = ['id', ...Object.keys(cards[0]).filter(k => k !== 'id')];
+
+  // Auto-detect default fields if not set in localStorage
+  let defaultCol1 = localStorage.getItem('auction-col1-field') || '';
+  let defaultCol2 = localStorage.getItem('auction-col2-field') || '';
+  let defaultCol3 = localStorage.getItem('auction-col3-field') || '';
+
+  if (!defaultCol1) {
+    const detected = headers.find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id';
+    defaultCol1 = detected;
+  }
+  if (!defaultCol2) {
+    const detected = headers.find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || headers[1] || 'id';
+    defaultCol2 = detected;
+  }
+  if (!defaultCol3) {
+    const detected = headers.find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id';
+    defaultCol3 = detected;
+  }
+
+  headers.forEach(header => {
+    // Col 1 Option
+    const opt1 = document.createElement('option');
+    opt1.value = header;
+    opt1.textContent = header === 'id' ? 'ID (Internal)' : header;
+    opt1.style.color = '#000';
+    if (header === defaultCol1) opt1.selected = true;
+    auctionCol1Select.appendChild(opt1);
+
+    // Col 2 Option
+    const opt2 = document.createElement('option');
+    opt2.value = header;
+    opt2.textContent = header === 'id' ? 'ID (Internal)' : header;
+    opt2.style.color = '#000';
+    if (header === defaultCol2) opt2.selected = true;
+    auctionCol2Select.appendChild(opt2);
+
+    // Col 3 Option
+    const opt3 = document.createElement('option');
+    opt3.value = header;
+    opt3.textContent = header === 'id' ? 'ID (Internal)' : header;
+    opt3.style.color = '#000';
+    if (header === defaultCol3) opt3.selected = true;
+    auctionCol3Select.appendChild(opt3);
+  });
+}
+
 function initDragAndDrop() {
   if (!cardPreviewFieldsContainer) return;
 
@@ -941,22 +1029,46 @@ async function printAuctionList() {
   lines.push({ enabled: true, text: 'AUCTION ITEMS ORDER', bold: true, align: 'center', size: 'large' });
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
 
-  const colHeader = formatAuctionColumns('#', 'Item Name', 'Bid', totalWidth);
+  // Load configured or auto-detected columns
+  let activeCol1 = localStorage.getItem('auction-col1-field') || '';
+  let activeCol2 = localStorage.getItem('auction-col2-field') || '';
+  let activeCol3 = localStorage.getItem('auction-col3-field') || '';
+
+  const sampleCard = cards[0] || {};
+  const validHeaders = ['id', ...Object.keys(sampleCard)];
+
+  if (!activeCol1 || !validHeaders.includes(activeCol1)) {
+    activeCol1 = Object.keys(sampleCard).find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id';
+  }
+  if (!activeCol2 || !validHeaders.includes(activeCol2)) {
+    activeCol2 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || Object.keys(sampleCard)[0] || 'id';
+  }
+  if (!activeCol3 || !validHeaders.includes(activeCol3)) {
+    activeCol3 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id';
+  }
+
+  const colHeader = formatAuctionColumns(
+    shortLabel(activeCol1),
+    shortLabel(activeCol2),
+    shortLabel(activeCol3),
+    totalWidth
+  );
   lines.push({ enabled: true, text: colHeader, bold: true, align: 'left', size: 'normal' });
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
 
   cards.forEach((card) => {
-    const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
-    const title = card[titleKey] || 'Untitled Item';
-    const donationNum = card['Donation #'] || card.id;
+    let col1Val = String(card[activeCol1] || '');
+    let col2Val = String(card[activeCol2] || '');
+    let col3Val = String(card[activeCol3] || '');
 
-    const bidKey = Object.keys(card).find(k => k.toLowerCase().includes('starting bid') || k.toLowerCase().includes('bid') || k.toLowerCase().includes('price')) || '';
-    let bid = bidKey ? card[bidKey] || '0' : '0';
-    if (bid && !bid.startsWith('$') && !isNaN(Number(bid))) {
-      bid = `$${bid}`;
+    // Format Col 3 starting bid / price if applicable
+    if (activeCol3.toLowerCase().includes('bid') || activeCol3.toLowerCase().includes('price')) {
+      if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
+        col3Val = `$${col3Val}`;
+      }
     }
 
-    const itemRow = formatAuctionColumns(donationNum.toString(), title, bid, totalWidth);
+    const itemRow = formatAuctionColumns(col1Val, col2Val, col3Val, totalWidth);
     lines.push({ enabled: true, text: itemRow, bold: false, align: 'left', size: 'normal' });
   });
 
@@ -2449,6 +2561,7 @@ searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputE
 
 settingsBtn.addEventListener('click', () => {
   renderCardPreviewFieldsSettings();
+  renderAuctionColumnsSettings();
   settingsModal.classList.remove('hidden');
 });
 closeSettingsBtn.addEventListener('click', () => {
@@ -2519,6 +2632,16 @@ auctionResetBtn.addEventListener('click', () => {
 
 auctionPrintBtn.addEventListener('click', async () => {
   await printAuctionList();
+});
+
+auctionCol1Select.addEventListener('change', () => {
+  localStorage.setItem('auction-col1-field', auctionCol1Select.value);
+});
+auctionCol2Select.addEventListener('change', () => {
+  localStorage.setItem('auction-col2-field', auctionCol2Select.value);
+});
+auctionCol3Select.addEventListener('change', () => {
+  localStorage.setItem('auction-col3-field', auctionCol3Select.value);
 });
 
 batchSelectAllBtn.addEventListener('click', () => {
@@ -3046,6 +3169,9 @@ exportAppBackupBtn.addEventListener('click', () => {
     'full-width': localStorage.getItem('full-width'),
     'grid-columns': localStorage.getItem('grid-columns'),
     'auction-card-order': localStorage.getItem('auction-card-order'),
+    'auction-col1-field': localStorage.getItem('auction-col1-field'),
+    'auction-col2-field': localStorage.getItem('auction-col2-field'),
+    'auction-col3-field': localStorage.getItem('auction-col3-field'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
