@@ -1142,7 +1142,17 @@ async function printAuctionList() {
 
   // Add the single Loop Line representing all items
   const loopPattern = getDefaultAuctionLoopPattern();
-  lines.push({ enabled: true, text: loopPattern, bold: false, align: 'left', size: 'normal', isLoop: true });
+  lines.push({
+    enabled: true,
+    text: 'Auction Loop Group',
+    bold: false,
+    align: 'left',
+    size: 'normal',
+    isLoop: true,
+    subLines: [
+      { enabled: true, text: loopPattern, bold: false, align: 'left', size: 'normal' }
+    ]
+  });
 
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
   lines.push({ enabled: true, text: 'TOTAL ITEMS: {TOTAL}', bold: true, align: 'center', size: 'normal' });
@@ -1849,83 +1859,134 @@ function formatTwoColumns(col1: string, col2: string, totalWidth: number): strin
   return `${c1} ${c2}`;
 }
 
-function expandPrintLines(lines: PrintLine[]): PrintLine[] {
+async function expandPrintLines(lines: PrintLine[]): Promise<PrintLine[]> {
   const expanded: PrintLine[] = [];
   const paperWidthSetting = browserPaperSize.value || '80mm';
   const totalWidth = paperWidthSetting === '58mm' ? 32 : 40;
 
   const currentSchema = schemaProfiles[activeSchemaId];
 
-  lines.forEach(line => {
-    if (!line.enabled) return;
+  for (const line of lines) {
+    if (!line.enabled) continue;
 
     if (line.isLoop) {
-      // 1. Generate the header line dynamically based on variables in line.text
-      const varRegex = /{{\s*([^}]+)\s*}}/g;
-      const variables: string[] = [];
-      let match;
-      while ((match = varRegex.exec(line.text)) !== null) {
-        variables.push(match[1].trim());
-      }
+      const subLines = line.subLines || [];
 
-      const headers = variables.map(v => {
-        if (currentSchema && currentSchema.mapping[v]) {
-          return shortLabel(currentSchema.mapping[v]);
+      // 1. Find the first sub-line with a pipe symbol to generate the table header dynamically
+      const tableSubLine = subLines.find(sl => sl.enabled && sl.text.includes('|') && sl.text.includes('{{'));
+      if (tableSubLine) {
+        const varRegex = /{{\s*([^}]+)\s*}}/g;
+        const variables: string[] = [];
+        let match;
+        while ((match = varRegex.exec(tableSubLine.text)) !== null) {
+          variables.push(match[1].trim());
         }
-        return shortLabel(v);
-      });
 
-      let headerText = '';
-      if (headers.length === 3) {
-        headerText = formatAuctionColumns(headers[0], headers[1], headers[2], totalWidth);
-      } else if (headers.length === 2) {
-        headerText = formatTwoColumns(headers[0], headers[1], totalWidth);
-      } else {
-        headerText = headers.join(' | ');
-      }
+        const headers = variables.map(v => {
+          if (currentSchema && currentSchema.mapping[v]) {
+            return shortLabel(currentSchema.mapping[v]);
+          }
+          return shortLabel(v);
+        });
 
-      if (headerText) {
-        expanded.push({
-          enabled: true,
-          text: headerText,
-          bold: true,
-          align: 'left',
-          size: 'normal'
-        });
-        expanded.push({
-          enabled: true,
-          text: '-'.repeat(totalWidth),
-          bold: false,
-          align: 'center',
-          size: 'normal',
-          isSeparator: true
-        });
+        let headerText = '';
+        if (headers.length === 3) {
+          headerText = formatAuctionColumns(headers[0], headers[1], headers[2], totalWidth);
+        } else if (headers.length === 2) {
+          headerText = formatTwoColumns(headers[0], headers[1], totalWidth);
+        } else {
+          headerText = headers.join(' | ');
+        }
+
+        if (headerText) {
+          expanded.push({
+            enabled: true,
+            text: headerText,
+            bold: true,
+            align: 'left',
+            size: 'normal'
+          });
+          expanded.push({
+            enabled: true,
+            text: '-'.repeat(totalWidth),
+            bold: false,
+            align: 'center',
+            size: 'normal',
+            isSeparator: true
+          });
+        }
       }
 
       // 2. Loop through all cards
-      cards.forEach(card => {
-        const interpolated = interpolate(line.text, card, currentSchema?.mapping, currentSchema?.variables);
-        const parts = interpolated.split('|').map(p => p.trim());
+      for (const card of cards) {
+        for (const subLine of subLines) {
+          if (!subLine.enabled) continue;
 
-        let textVal = interpolated;
-        if (parts.length === 3) {
-          let col3Val = parts[2];
-          if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
-            col3Val = `$${col3Val}`;
+          if (subLine.isSeparator) {
+            expanded.push({ ...subLine });
+            continue;
           }
-          textVal = formatAuctionColumns(parts[0], parts[1], col3Val, totalWidth);
-        } else if (parts.length === 2) {
-          textVal = formatTwoColumns(parts[0], parts[1], totalWidth);
-        }
 
-        expanded.push({
-          enabled: true,
-          text: textVal,
-          bold: line.bold || false,
-          align: line.align || 'left',
-          size: line.size || 'normal'
-        });
-      });
+          const interpolated = interpolate(subLine.text, card, currentSchema?.mapping, currentSchema?.variables);
+          let textVal = interpolated;
+
+          if (subLine.text.includes('|')) {
+            const parts = interpolated.split('|').map(p => p.trim());
+            if (parts.length === 3) {
+              let col3Val = parts[2];
+              if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
+                col3Val = `$${col3Val}`;
+              }
+              textVal = formatAuctionColumns(parts[0], parts[1], col3Val, totalWidth);
+            } else if (parts.length === 2) {
+              textVal = formatTwoColumns(parts[0], parts[1], totalWidth);
+            }
+          }
+
+          let imageUrlVal = subLine.imageUrl;
+          if (subLine.isImage && imageUrlVal) {
+            imageUrlVal = normalizeImageUrl(interpolate(imageUrlVal, card, currentSchema?.mapping, currentSchema?.variables));
+          }
+
+          const subLineCopy = {
+            ...subLine,
+            text: textVal,
+            imageUrl: imageUrlVal
+          };
+
+          // Generate barcode/QR if needed
+          if (subLineCopy.isQr) {
+            try {
+              subLineCopy.imageUrl = await QRCode.toDataURL(textVal, { width: 250, margin: 2, scale: 4 });
+            } catch {}
+          } else if (subLineCopy.isBarcode) {
+            try {
+              const canvas = document.createElement('canvas');
+              bwipjs.toCanvas(canvas, { bcid: subLineCopy.barcodeFormat || 'code128', text: textVal || '1234', scale: 3, height: 10, includetext: true, textxalign: 'center' });
+              subLineCopy.imageUrl = canvas.toDataURL('image/png');
+            } catch (e: any) {
+              const canvas = document.createElement('canvas');
+              canvas.width = 300;
+              canvas.height = 60;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 300, 60);
+                ctx.fillStyle = 'red';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Barcode Error', 150, 25);
+                ctx.font = '12px sans-serif';
+                const msg = e.message ? (e.message.split(':').pop()?.trim() || e.message) : 'Invalid format';
+                ctx.fillText(msg, 150, 45);
+              }
+              subLineCopy.imageUrl = canvas.toDataURL('image/png');
+            }
+          }
+
+          expanded.push(subLineCopy);
+        }
+      }
     } else {
       let lineText = line.text;
       if (lineText.includes('{TOTAL}')) {
@@ -1936,16 +1997,16 @@ function expandPrintLines(lines: PrintLine[]): PrintLine[] {
         text: lineText
       });
     }
-  });
+  }
 
   return expanded;
 }
 
-function updateReceiptPaper() {
+async function updateReceiptPaper() {
   if (!isAuctionPrint) savePrintTemplate();
   // Render receipt paper
   receiptPaper.innerHTML = '';
-  const linesToRender = isAuctionPrint ? expandPrintLines(printLines) : printLines;
+  const linesToRender = isAuctionPrint ? await expandPrintLines(printLines) : printLines;
   linesToRender.forEach((line, index) => {
     if (!line.enabled) return;
     if (line.isImage && line.imageUrl) {
@@ -2178,34 +2239,330 @@ function renderPrintPreview() {
 
       topRow.appendChild(removeBtn);
     } else if (line.isLoop) {
+      control.classList.add('loop-group-card');
+
       const labelSpan = document.createElement('span');
-      labelSpan.textContent = '🔁 Loop Pattern:';
-      labelSpan.style.fontSize = '0.85rem';
+      labelSpan.textContent = '🔁 Loop Group';
+      labelSpan.style.fontSize = '0.9rem';
       labelSpan.style.color = '#fbbf24';
       labelSpan.style.fontWeight = 'bold';
       labelSpan.style.marginRight = '5px';
       topRow.appendChild(labelSpan);
 
-      const textInput = document.createElement('input');
-      textInput.type = 'text';
-      textInput.value = line.text;
-      textInput.placeholder = 'e.g. {{Number}} | {{Donor}} | {{Price}}';
-      textInput.style.flex = '1';
-      textInput.addEventListener('input', () => {
-        printLines[index].text = textInput.value;
-        updateReceiptPaper();
-      });
-
       const removeBtn = document.createElement('button');
       removeBtn.className = 'remove-line-btn';
       removeBtn.textContent = '✕';
+      removeBtn.title = 'Delete Loop Group';
       removeBtn.addEventListener('click', () => {
         printLines.splice(index, 1);
         renderPrintPreview();
       });
-
-      topRow.appendChild(textInput);
       topRow.appendChild(removeBtn);
+
+      if (!line.subLines) {
+        line.subLines = [];
+      }
+
+      const subLinesContainer = document.createElement('div');
+      subLinesContainer.className = 'loop-sublines-container';
+
+      line.subLines.forEach((subLine, subIndex) => {
+        const subControl = document.createElement('div');
+        subControl.className = 'loop-subline-control';
+        subControl.draggable = false;
+
+        subControl.addEventListener('dragstart', (e) => {
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', `sub:${index}:${subIndex}`);
+          }
+          subControl.classList.add('dragging');
+          e.stopPropagation();
+        });
+        subControl.addEventListener('dragend', (e) => {
+          subControl.classList.remove('dragging');
+          e.stopPropagation();
+        });
+
+        subControl.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          subControl.style.borderTop = '2px solid var(--primary-color)';
+          e.stopPropagation();
+        });
+        subControl.addEventListener('dragleave', (e) => {
+          subControl.style.borderTop = '';
+          e.stopPropagation();
+        });
+        subControl.addEventListener('drop', (e) => {
+          e.preventDefault();
+          subControl.style.borderTop = '';
+          e.stopPropagation();
+          
+          if (e.dataTransfer) {
+            const dataStr = e.dataTransfer.getData('text/plain');
+            if (dataStr.startsWith('sub:')) {
+              const parts = dataStr.split(':');
+              const parentIdx = parseInt(parts[1]);
+              const fromSubIdx = parseInt(parts[2]);
+
+              if (parentIdx === index && fromSubIdx !== subIndex) {
+                const item = line.subLines!.splice(fromSubIdx, 1)[0];
+                line.subLines!.splice(subIndex, 0, item);
+                renderPrintPreview();
+              }
+            }
+          }
+        });
+
+        const subTopRow = document.createElement('div');
+        subTopRow.className = 'print-line-top';
+
+        const subDragHandle = document.createElement('span');
+        subDragHandle.textContent = '☰';
+        subDragHandle.style.cursor = 'grab';
+        subDragHandle.style.marginRight = '8px';
+        subDragHandle.style.color = '#888';
+        
+        subDragHandle.addEventListener('mouseenter', () => {
+          subControl.draggable = true;
+        });
+        subDragHandle.addEventListener('mouseleave', () => {
+          subControl.draggable = false;
+        });
+
+        const subCheckbox = document.createElement('input');
+        subCheckbox.type = 'checkbox';
+        subCheckbox.checked = subLine.enabled;
+        subCheckbox.addEventListener('change', () => {
+          subLine.enabled = subCheckbox.checked;
+          updateReceiptPaper();
+        });
+
+        subTopRow.appendChild(subDragHandle);
+        subTopRow.appendChild(subCheckbox);
+
+        if (subLine.isImage) {
+          if (subLine.isQr || subLine.isBarcode) {
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.value = subLine.text || '';
+            textInput.style.flex = '1';
+            textInput.placeholder = subLine.isQr ? 'QR Code Data' : 'Barcode Data';
+            
+            let typingTimer: any;
+            textInput.addEventListener('input', () => {
+              subLine.text = textInput.value;
+              clearTimeout(typingTimer);
+              typingTimer = setTimeout(() => {
+                updateReceiptPaper();
+              }, 300);
+            });
+            subTopRow.appendChild(textInput);
+
+            if (subLine.isBarcode) {
+              const formatSelect = document.createElement('select');
+              formatSelect.style.marginLeft = '10px';
+              
+              const formats = ['code128', 'code39', 'ean13', 'upca'];
+              formats.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f.toUpperCase();
+                opt.style.color = '#000';
+                formatSelect.appendChild(opt);
+              });
+              formatSelect.value = subLine.barcodeFormat || 'code128';
+              formatSelect.addEventListener('change', () => {
+                 subLine.barcodeFormat = formatSelect.value;
+                 updateReceiptPaper();
+              });
+              subTopRow.appendChild(formatSelect);
+            }
+          } else {
+            const urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.value = subLine.imageUrl || '';
+            urlInput.placeholder = 'Image URL (e.g. https://... or {{Image}})';
+            urlInput.style.flex = '1';
+            
+            let typingTimer: any;
+            urlInput.addEventListener('input', () => {
+              subLine.imageUrl = urlInput.value;
+              delete subLine.rasterData;
+              clearTimeout(typingTimer);
+              typingTimer = setTimeout(() => {
+                updateReceiptPaper();
+              }, 300);
+            });
+            subTopRow.appendChild(urlInput);
+
+            const sliderWrap = document.createElement('div');
+            sliderWrap.style.display = 'flex';
+            sliderWrap.style.alignItems = 'center';
+            sliderWrap.style.gap = '5px';
+            sliderWrap.style.marginLeft = '10px';
+            
+            const leftLabel = document.createElement('span');
+            leftLabel.textContent = '🌘';
+            leftLabel.style.fontSize = '0.8rem';
+            
+            const rightLabel = document.createElement('span');
+            rightLabel.textContent = '☀️';
+            rightLabel.style.fontSize = '0.8rem';
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = '0.2';
+            slider.max = '3.0';
+            slider.step = '0.1';
+            slider.value = (subLine.gamma || 1.0).toString();
+            slider.addEventListener('input', () => {
+              subLine.gamma = parseFloat(slider.value);
+              updateReceiptPaper();
+            });
+            
+            const resetBtn = document.createElement('button');
+            resetBtn.type = 'button';
+            resetBtn.innerHTML = '↺';
+            resetBtn.style.background = 'none';
+            resetBtn.style.border = 'none';
+            resetBtn.style.color = 'var(--text-color)';
+            resetBtn.style.cursor = 'pointer';
+            resetBtn.style.padding = '0 4px';
+            resetBtn.style.fontSize = '1rem';
+            resetBtn.title = 'Reset to default contrast';
+            resetBtn.addEventListener('click', () => {
+              slider.value = '1.0';
+              subLine.gamma = 1.0;
+              updateReceiptPaper();
+            });
+            
+            sliderWrap.appendChild(leftLabel);
+            sliderWrap.appendChild(slider);
+            sliderWrap.appendChild(rightLabel);
+            sliderWrap.appendChild(resetBtn);
+            subTopRow.appendChild(sliderWrap);
+          }
+        } else if (subLine.isSeparator) {
+          const sepLabel = document.createElement('span');
+          sepLabel.textContent = '------------------ Horizontal Separator ------------------';
+          sepLabel.style.fontSize = '0.8rem';
+          sepLabel.style.color = 'var(--text-muted)';
+          sepLabel.style.flex = '1';
+          sepLabel.style.textAlign = 'center';
+          subTopRow.appendChild(sepLabel);
+        } else {
+          const textInput = document.createElement('input');
+          textInput.type = 'text';
+          textInput.value = subLine.text;
+          textInput.placeholder = 'e.g. {{Number}} | {{Donor}} | {{Price}}';
+          textInput.style.flex = '1';
+          textInput.addEventListener('input', () => {
+            subLine.text = textInput.value;
+            updateReceiptPaper();
+          });
+          subTopRow.appendChild(textInput);
+        }
+
+        const subRemoveBtn = document.createElement('button');
+        subRemoveBtn.className = 'remove-line-btn';
+        subRemoveBtn.textContent = '✕';
+        subRemoveBtn.addEventListener('click', () => {
+          line.subLines!.splice(subIndex, 1);
+          renderPrintPreview();
+        });
+        subTopRow.appendChild(subRemoveBtn);
+
+        subControl.appendChild(subTopRow);
+
+        if (!subLine.isSeparator) {
+          const subOptionsRow = document.createElement('div');
+          subOptionsRow.className = 'print-line-options';
+          subOptionsRow.style.paddingLeft = '30px';
+
+          const makeSubBtn = (lbl: string, isActive: boolean, onClick: () => void) => {
+            const btn = document.createElement('button');
+            btn.textContent = lbl;
+            btn.type = 'button';
+            if (isActive) btn.classList.add('active');
+            btn.addEventListener('click', onClick);
+            return btn;
+          };
+
+          subOptionsRow.appendChild(makeSubBtn('Bold', subLine.bold || false, () => {
+            subLine.bold = !subLine.bold;
+            renderPrintPreview();
+          }));
+
+          subOptionsRow.appendChild(makeSubBtn('Left', subLine.align === 'left', () => {
+            subLine.align = 'left';
+            renderPrintPreview();
+          }));
+          subOptionsRow.appendChild(makeSubBtn('Center', subLine.align === 'center', () => {
+            subLine.align = 'center';
+            renderPrintPreview();
+          }));
+          subOptionsRow.appendChild(makeSubBtn('Right', subLine.align === 'right', () => {
+            subLine.align = 'right';
+            renderPrintPreview();
+          }));
+
+          const sizes: Array<'xs' | 'small' | 'normal' | 'large' | 'xl'> = ['xs', 'small', 'normal', 'large', 'xl'];
+          sizes.forEach(sz => {
+            subOptionsRow.appendChild(makeSubBtn(sz.toUpperCase(), subLine.size === sz, () => {
+              subLine.size = sz;
+              renderPrintPreview();
+            }));
+          });
+
+          subControl.appendChild(subOptionsRow);
+        }
+
+        subLinesContainer.appendChild(subControl);
+      });
+
+      const addButtonsContainer = document.createElement('div');
+      addButtonsContainer.style.display = 'flex';
+      addButtonsContainer.style.flexWrap = 'wrap';
+      addButtonsContainer.style.gap = '6px';
+      addButtonsContainer.style.marginTop = '8px';
+      addButtonsContainer.style.paddingLeft = '15px';
+
+      const makeAddBtn = (lbl: string, onClick: () => void) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn secondary-btn';
+        btn.style.padding = '3px 8px';
+        btn.style.fontSize = '0.75rem';
+        btn.textContent = lbl;
+        btn.addEventListener('click', onClick);
+        return btn;
+      };
+
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Text', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'left', size: 'normal' });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Image', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, imageUrl: '', gamma: 1.0 });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add QR', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, isQr: true, gamma: 1.0 });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Barcode', () => {
+        line.subLines!.push({ enabled: true, text: '', bold: false, align: 'center', size: 'normal', isImage: true, isBarcode: true, barcodeFormat: 'code128', gamma: 1.0 });
+        renderPrintPreview();
+      }));
+      addButtonsContainer.appendChild(makeAddBtn('➕ Add Separator', () => {
+        line.subLines!.push({ enabled: true, text: '--------------------------------', bold: false, align: 'center', size: 'xs', isSeparator: true });
+        renderPrintPreview();
+      }));
+
+      subLinesContainer.appendChild(addButtonsContainer);
+      control.appendChild(subLinesContainer);
     } else {
       const textInput = document.createElement('input');
       textInput.type = 'text';
@@ -2549,7 +2906,7 @@ printPreviewSend.addEventListener('click', async () => {
 
   if (isAuctionPrint) {
     try {
-      await sendLinesToPrinter(expandPrintLines(printLines));
+      await sendLinesToPrinter(await expandPrintLines(printLines));
       closePrintPreviewModal();
     } catch (e: any) {
       alert(e.message);

@@ -754,7 +754,42 @@ body.light-theme select option {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
   border: 1px solid var(--glass-border);
-  min-width: 0;
+}
+
+/* Loop Group Cards Styling */
+.loop-group-card {
+  border: 1px dashed #fbbf24 !important;
+  background: rgba(245, 158, 11, 0.05) !important;
+  padding: 12px !important;
+}
+
+.loop-sublines-container {
+  padding-left: 15px;
+  border-left: 2px dashed rgba(245, 158, 11, 0.4);
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loop-subline-control {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: grab;
+}
+
+.loop-subline-control:active {
+  cursor: grabbing;
+}
+
+.loop-subline-control.dragging {
+  opacity: 0.4;
+  border: 1px dashed var(--primary-color);
 }
 
 .print-line-top {

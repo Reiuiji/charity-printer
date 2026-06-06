@@ -19,6 +19,7 @@ export interface PrintLine {
   isBarcode?: boolean;
   barcodeFormat?: string;
   isLoop?: boolean;
+  subLines?: PrintLine[];
 }
 
 export interface TemplateProfile {
