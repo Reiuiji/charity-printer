@@ -25,6 +25,9 @@ let countdownSeconds = 0;
 let currentFilter: 'all' | 'unprinted' | 'printed' = 'all';
 let isTemplateMode = false;
 let lastClickedCard: CardData | null = null;
+let selectedPreviewFields: string[] = JSON.parse(localStorage.getItem('card-preview-fields') || '[]');
+let isSelectMode = false;
+let selectedItemIds: Set<string> = new Set();
 
 // Schema Mapping
 let activeSchemaId = localStorage.getItem('activeSchemaId') || 'Charity';
@@ -83,6 +86,7 @@ const browserPrintSettings = document.getElementById('browser-print-settings') a
 const browserPaperSize = document.getElementById('browser-paper-size') as HTMLSelectElement;
 const browserPrintScale = document.getElementById('browser-print-scale') as HTMLSelectElement;
 const browserImageWidth = document.getElementById('browser-image-width') as HTMLSelectElement;
+const cardPreviewFieldsContainer = document.getElementById('card-preview-fields-container') as HTMLDivElement;
 
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
@@ -92,6 +96,14 @@ const customIdPrefix = document.getElementById('custom-id-prefix') as HTMLInputE
 const customIdNext = document.getElementById('custom-id-next') as HTMLInputElement;
 const createCustomReceiptBtn = document.getElementById('create-custom-receipt-btn') as HTMLButtonElement;
 const mainAutoSyncStatus = document.getElementById('main-auto-sync-status') as HTMLDivElement;
+const selectModeBtn = document.getElementById('select-mode-btn') as HTMLButtonElement;
+const batchActionsBar = document.getElementById('batch-actions-bar') as HTMLDivElement;
+const selectedCount = document.getElementById('selected-count') as HTMLSpanElement;
+const batchSelectAllBtn = document.getElementById('batch-select-all-btn') as HTMLButtonElement;
+const batchClearBtn = document.getElementById('batch-clear-btn') as HTMLButtonElement;
+const batchMarkPrintedBtn = document.getElementById('batch-mark-printed-btn') as HTMLButtonElement;
+const batchMarkUnprintedBtn = document.getElementById('batch-mark-unprinted-btn') as HTMLButtonElement;
+const batchPrintBtn = document.getElementById('batch-print-btn') as HTMLButtonElement;
 const mainAutoPrintStatus = document.getElementById('main-auto-print-status') as HTMLDivElement;
 const cardsContainer = document.getElementById('cards-container') as HTMLDivElement;
 const searchInput = document.getElementById('search-input') as HTMLInputElement;
@@ -143,6 +155,26 @@ function shortLabel(key: string): string {
     'Please take a picture of your donation': 'Photo',
   };
   return map[key] || key;
+}
+
+function checkIsImageField(key: string, value: string): boolean {
+  if (!value || !value.trim()) return false;
+  const currentProfile = schemaProfiles[activeSchemaId];
+  const imageMappedColumn = currentProfile ? currentProfile.mapping["Image"] : null;
+  const isPhotoColumn = key.toLowerCase().includes('picture') || 
+                        key.toLowerCase().includes('photo') || 
+                        key.toLowerCase().includes('image') ||
+                        (imageMappedColumn && key === imageMappedColumn);
+                        
+  const looksLikeImageUrl = /^https?:\/\/.+/i.test(value.trim()) && (
+    /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(value) ||
+    value.includes('googleusercontent') ||
+    value.includes('drive.google') ||
+    value.includes('docs.google.com') ||
+    value.includes('imgur')
+  );
+  
+  return !!(isPhotoColumn && looksLikeImageUrl);
 }
 
 // Update Header Statuses
@@ -221,10 +253,13 @@ function init() {
   const savedCards = localStorage.getItem('cards-data');
   if (savedCards) {
     cards = JSON.parse(savedCards);
+    initializeDefaultPreviewFields();
     renderCards();
   }
   
   renderSchemaMapper();
+  renderCardPreviewFieldsSettings();
+  initDragAndDrop();
 
   const syncTime = localStorage.getItem('last-sync');
   if (syncTime) {
@@ -406,8 +441,10 @@ async function fetchData() {
         });
 
         saveCards();
+        initializeDefaultPreviewFields();
         renderCards();
         renderSchemaMapper();
+        renderCardPreviewFieldsSettings();
         
         const now = new Date().toISOString();
         localStorage.setItem('last-sync', now);
@@ -546,6 +583,195 @@ function renderSchemaMapper() {
     
     schemaMapperContainer.appendChild(row);
   });
+}
+
+function initializeDefaultPreviewFields() {
+  if (cards.length === 0) return;
+  
+  // If we already have selected fields saved, keep them
+  if (selectedPreviewFields.length > 0) return;
+  
+  const headers = Object.keys(cards[0]);
+  
+  // Find keys matching Item, Description, and Starting Bid
+  const itemKey = headers.find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().includes('item'));
+  const descKey = headers.find(h => h.toLowerCase().includes('describe') || h.toLowerCase().includes('description'));
+  const bidKey = headers.find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('price') || h.toLowerCase().includes('bid'));
+  
+  // Find key matching Photo/Image
+  const currentProfile = schemaProfiles[activeSchemaId];
+  const imageMappedColumn = currentProfile ? currentProfile.mapping["Image"] : null;
+  const photoKey = headers.find(h => {
+    const lower = h.toLowerCase();
+    return lower.includes('picture') || 
+           lower.includes('photo') || 
+           lower.includes('image') ||
+           (imageMappedColumn && h === imageMappedColumn);
+  });
+  
+  selectedPreviewFields = [itemKey, descKey, bidKey, photoKey].filter((k): k is string => !!k);
+  
+  if (selectedPreviewFields.length > 0) {
+    localStorage.setItem('card-preview-fields', JSON.stringify(selectedPreviewFields));
+  }
+}
+
+function renderCardPreviewFieldsSettings() {
+  if (!cardPreviewFieldsContainer) return;
+  cardPreviewFieldsContainer.innerHTML = '';
+
+  if (cards.length === 0) {
+    cardPreviewFieldsContainer.innerHTML = '<em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure preview fields.</em>';
+    return;
+  }
+
+  let headers = Object.keys(cards[0]).filter(k => k !== 'id');
+  
+  // Sort headers by saved drag order if it exists
+  const savedOrderStr = localStorage.getItem('card-preview-fields-order');
+  if (savedOrderStr) {
+    const savedOrder: string[] = JSON.parse(savedOrderStr);
+    const existingSavedOrder = savedOrder.filter(h => headers.includes(h));
+    const newHeaders = headers.filter(h => !savedOrder.includes(h));
+    headers = [...existingSavedOrder, ...newHeaders];
+  }
+
+  headers.forEach(header => {
+    const isChecked = selectedPreviewFields.includes(header);
+    
+    const itemEl = document.createElement('div');
+    itemEl.className = 'preview-field-item draggable';
+    itemEl.draggable = true;
+    itemEl.dataset.header = header;
+    itemEl.style.display = 'flex';
+    itemEl.style.alignItems = 'center';
+    itemEl.style.gap = '10px';
+    itemEl.style.padding = '8px';
+    itemEl.style.background = 'rgba(255,255,255,0.05)';
+    itemEl.style.border = '1px solid var(--glass-border)';
+    itemEl.style.borderRadius = '6px';
+    itemEl.style.transition = 'background 0.2s';
+    
+    const dragHandle = document.createElement('span');
+    dragHandle.textContent = '⋮⋮';
+    dragHandle.style.color = 'var(--text-muted)';
+    dragHandle.style.cursor = 'grab';
+    dragHandle.style.fontWeight = 'bold';
+    
+    const label = document.createElement('label');
+    label.style.display = 'flex';
+    label.style.alignItems = 'center';
+    label.style.gap = '8px';
+    label.style.cursor = 'pointer';
+    label.style.fontSize = '0.9rem';
+    label.style.flex = '1';
+    label.style.margin = '0';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = header;
+    checkbox.checked = isChecked;
+    checkbox.style.cursor = 'pointer';
+
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        if (!selectedPreviewFields.includes(header)) {
+          selectedPreviewFields.push(header);
+        }
+      } else {
+        selectedPreviewFields = selectedPreviewFields.filter(f => f !== header);
+      }
+      localStorage.setItem('card-preview-fields', JSON.stringify(selectedPreviewFields));
+      renderCards(searchInput.value);
+    });
+
+    const textSpan = document.createElement('span');
+    const displayLabel = shortLabel(header);
+    if (displayLabel !== header) {
+      textSpan.innerHTML = `${displayLabel} <span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">(${header})</span>`;
+    } else {
+      textSpan.textContent = header;
+    }
+
+    label.appendChild(checkbox);
+    label.appendChild(textSpan);
+    itemEl.appendChild(dragHandle);
+    itemEl.appendChild(label);
+    cardPreviewFieldsContainer.appendChild(itemEl);
+  });
+}
+
+function initDragAndDrop() {
+  if (!cardPreviewFieldsContainer) return;
+
+  cardPreviewFieldsContainer.addEventListener('dragstart', (e) => {
+    const target = e.target as HTMLElement;
+    const draggable = target.closest('.draggable');
+    if (draggable) {
+      draggable.classList.add('dragging');
+    }
+  });
+
+  cardPreviewFieldsContainer.addEventListener('dragend', (e) => {
+    const target = e.target as HTMLElement;
+    const draggable = target.closest('.draggable');
+    if (draggable) {
+      draggable.classList.remove('dragging');
+    }
+    saveNewFieldsOrder();
+  });
+
+  cardPreviewFieldsContainer.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const draggingEl = cardPreviewFieldsContainer.querySelector('.dragging');
+    if (!draggingEl) return;
+
+    const afterElement = getDragAfterElement(cardPreviewFieldsContainer, e.clientY);
+    if (afterElement == null) {
+      cardPreviewFieldsContainer.appendChild(draggingEl);
+    } else {
+      cardPreviewFieldsContainer.insertBefore(draggingEl, afterElement);
+    }
+  });
+}
+
+function getDragAfterElement(container: HTMLElement, y: number): Element | null {
+  const draggableElements = [...container.querySelectorAll('.draggable:not(.dragging)')];
+
+  return draggableElements.reduce<{ offset: number; element: Element | null }>((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+}
+
+function saveNewFieldsOrder() {
+  if (!cardPreviewFieldsContainer) return;
+
+  const itemElements = [...cardPreviewFieldsContainer.querySelectorAll('.draggable')];
+  const newOrder: string[] = [];
+  const newSelected: string[] = [];
+
+  itemElements.forEach(el => {
+    const header = (el as HTMLElement).dataset.header;
+    const checkbox = el.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (header) {
+      newOrder.push(header);
+      if (checkbox && checkbox.checked) {
+        newSelected.push(header);
+      }
+    }
+  });
+
+  selectedPreviewFields = newSelected;
+  localStorage.setItem('card-preview-fields', JSON.stringify(selectedPreviewFields));
+  localStorage.setItem('card-preview-fields-order', JSON.stringify(newOrder));
+
+  renderCards(searchInput.value);
 }
 
 schemaProfileSelect?.addEventListener('change', (e) => {
@@ -711,20 +937,46 @@ function renderCards(filterText = '') {
     // Find the donation number
     const donationNum = card['Donation #'] || card.id;
 
-    // Show a compact preview of a few key fields
+    // Show a compact preview of selected fields, or a few key fields by default
     let fieldsHtml = '';
-    let fieldCount = 0;
-    for (const [key, value] of Object.entries(card)) {
-      if (key === 'id' || key === titleKey || key === 'Donation #') continue;
-      if (!value || !value.trim()) continue;
-      if (fieldCount >= 3) { fieldsHtml += `<div class="row-field more">…more</div>`; break; }
-      fieldsHtml += `
-        <div class="row-field">
-          <strong>${shortLabel(key)}</strong>
-          <span>${value.length > 60 ? value.slice(0, 60) + '…' : value}</span>
-        </div>
-      `;
-      fieldCount++;
+    if (selectedPreviewFields.length > 0) {
+      selectedPreviewFields.forEach(key => {
+        const value = card[key];
+        if (key === 'id') return; // Skip internal ID
+        if (!value || !value.trim()) return;
+
+        const isImage = checkIsImageField(key, value);
+        const valueHtml = isImage
+          ? `<img src="${normalizeImageUrl(value)}" alt="${shortLabel(key)}" class="card-preview-image" referrerpolicy="no-referrer" loading="lazy" />`
+          : `<span>${value.length > 60 ? value.slice(0, 60) + '…' : value}</span>`;
+
+        fieldsHtml += `
+          <div class="row-field">
+            <strong>${shortLabel(key)}</strong>
+            ${valueHtml}
+          </div>
+        `;
+      });
+    } else {
+      let fieldCount = 0;
+      for (const [key, value] of Object.entries(card)) {
+        if (key === 'id' || key === titleKey || key === 'Donation #') continue;
+        if (!value || !value.trim()) continue;
+        if (fieldCount >= 3) { fieldsHtml += `<div class="row-field more">…more</div>`; break; }
+        
+        const isImage = checkIsImageField(key, value);
+        const valueHtml = isImage
+          ? `<img src="${normalizeImageUrl(value)}" alt="${shortLabel(key)}" class="card-preview-image" referrerpolicy="no-referrer" loading="lazy" />`
+          : `<span>${value.length > 60 ? value.slice(0, 60) + '…' : value}</span>`;
+
+        fieldsHtml += `
+          <div class="row-field">
+            <strong>${shortLabel(key)}</strong>
+            ${valueHtml}
+          </div>
+        `;
+        fieldCount++;
+      }
     }
     const currentTemplateId = templateAssignments[card.id] || activeTemplateId;
     let templateOptionsHtml = '';
@@ -732,26 +984,37 @@ function renderCards(filterText = '') {
       templateOptionsHtml += `<option value="${profile.id}" ${currentTemplateId === profile.id ? 'selected' : ''}>${profile.name}</option>`;
     }
 
-    cardEl.innerHTML = `
-      <div class="card-header">
-        <span class="card-badge">#${donationNum}</span>
-        <div class="card-title">${title}</div>
-      </div>
-      <div class="card-content">
-        ${fieldsHtml}
-      </div>
-      <div class="card-actions" style="flex-wrap: wrap; gap: 8px;">
-        <select class="form-input template-assign-select" data-id="${card.id}" style="padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); flex: 1; min-width: 100%; font-size: 0.8rem;" title="Select Template">
-          ${templateOptionsHtml}
-        </select>
-        <div style="display: flex; gap: 10px; width: 100%;">
-          <button class="btn secondary-btn edit-btn" style="flex: 1" data-id="${card.id}">✏️ Edit</button>
-          <button class="btn print-btn print-item-btn ${printedIds.has(card.id) ? 'printed' : ''}" style="flex: 2" data-id="${card.id}">
-            ${printedIds.has(card.id) ? '✅ Printed' : '🖨️ Print'}
-          </button>
+      if (isSelectMode && selectedItemIds.has(card.id)) {
+        cardEl.classList.add('selected');
+      } else {
+        cardEl.classList.remove('selected');
+      }
+
+      const checkboxHtml = isSelectMode 
+        ? `<input type="checkbox" class="card-select-checkbox" data-id="${card.id}" ${selectedItemIds.has(card.id) ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary-color); margin-right: 5px; flex-shrink: 0;" />`
+        : '';
+
+      cardEl.innerHTML = `
+        <div class="card-header" style="display: flex; align-items: center; gap: 8px;">
+          ${checkboxHtml}
+          <span class="card-badge">#${donationNum}</span>
+          <div class="card-title">${title}</div>
         </div>
-      </div>
-    `;
+        <div class="card-content">
+          ${fieldsHtml}
+        </div>
+        <div class="card-actions" style="flex-wrap: wrap; gap: 8px;">
+          <select class="form-input template-assign-select" data-id="${card.id}" style="padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); flex: 1; min-width: 100%; font-size: 0.8rem;" title="Select Template">
+            ${templateOptionsHtml}
+          </select>
+          <div style="display: flex; gap: 10px; width: 100%;">
+            <button class="btn secondary-btn edit-btn" style="flex: 1" data-id="${card.id}">✏️ Edit</button>
+            <button class="btn print-btn print-item-btn ${printedIds.has(card.id) ? 'printed' : ''}" style="flex: 2" data-id="${card.id}">
+              ${printedIds.has(card.id) ? '✅ Printed' : '🖨️ Print'}
+            </button>
+          </div>
+        </div>
+      `;
 
     cardsContainer.appendChild(cardEl);
   });
@@ -768,14 +1031,30 @@ function renderCards(filterText = '') {
     });
   });
 
-  // Click card body to open preview
+  // Click card body to open preview or toggle selection
   document.querySelectorAll('.card').forEach(cardEl => {
     cardEl.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      // Don't open preview if they clicked an action button
       if (target.closest('.card-actions')) return;
       const id = (cardEl as HTMLElement).dataset.id;
-      if (id) openPreviewModal(id);
+      if (!id) return;
+
+      if (isSelectMode) {
+        const checkbox = cardEl.querySelector('.card-select-checkbox') as HTMLInputElement;
+        if (target !== checkbox) {
+          checkbox.checked = !checkbox.checked;
+        }
+        if (checkbox.checked) {
+          selectedItemIds.add(id);
+          cardEl.classList.add('selected');
+        } else {
+          selectedItemIds.delete(id);
+          cardEl.classList.remove('selected');
+        }
+        updateSelectedCountUI();
+      } else {
+        openPreviewModal(id);
+      }
     });
   });
 
@@ -818,16 +1097,9 @@ function openPreviewModal(id: string) {
     if (!value || !value.trim()) continue;
 
     // Check if it's an image URL
-    const isPhotoColumn = key.toLowerCase().includes('picture') || key.toLowerCase().includes('photo') || key.toLowerCase().includes('image');
-    const looksLikeImageUrl = /^https?:\/\/.+/i.test(value.trim()) && (
-      /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(value) ||
-      value.includes('googleusercontent') ||
-      value.includes('drive.google') ||
-      value.includes('imgur')
-    );
-    const isImage = isPhotoColumn && looksLikeImageUrl;
+    const isImage = checkIsImageField(key, value);
     const valueHtml = isImage
-      ? `<img src="${normalizeImageUrl(value)}" alt="${shortLabel(key)}" class="preview-image" />`
+      ? `<img src="${normalizeImageUrl(value)}" alt="${shortLabel(key)}" class="preview-image" referrerpolicy="no-referrer" />`
       : `<span>${value}</span>`;
 
     fieldsHtml += `
@@ -1927,6 +2199,7 @@ connectPrinterBtn.addEventListener('click', () => connectPrinter());
 searchInput.addEventListener('input', (e) => renderCards((e.target as HTMLInputElement).value));
 
 settingsBtn.addEventListener('click', () => {
+  renderCardPreviewFieldsSettings();
   settingsModal.classList.remove('hidden');
 });
 closeSettingsBtn.addEventListener('click', () => {
@@ -1934,6 +2207,104 @@ closeSettingsBtn.addEventListener('click', () => {
 });
 settingsModal.addEventListener('click', (e) => {
   if (e.target === settingsModal) settingsModal.classList.add('hidden');
+});
+
+selectModeBtn.addEventListener('click', () => {
+  isSelectMode = !isSelectMode;
+  if (isSelectMode) {
+    selectModeBtn.textContent = '❌ Exit Select';
+    selectModeBtn.style.background = 'var(--primary-color)';
+    selectModeBtn.style.color = 'white';
+    batchActionsBar.classList.remove('hidden');
+  } else {
+    selectModeBtn.textContent = '☑️ Select Mode';
+    selectModeBtn.style.background = '';
+    selectModeBtn.style.color = '';
+    batchActionsBar.classList.add('hidden');
+    selectedItemIds.clear();
+  }
+  updateSelectedCountUI();
+  renderCards(searchInput.value);
+});
+
+batchSelectAllBtn.addEventListener('click', () => {
+  const visibleCards = cardsContainer.querySelectorAll('.card');
+  visibleCards.forEach(cardEl => {
+    const id = (cardEl as HTMLElement).dataset.id;
+    if (id) {
+      selectedItemIds.add(id);
+      const checkbox = cardEl.querySelector('.card-select-checkbox') as HTMLInputElement;
+      if (checkbox) checkbox.checked = true;
+      cardEl.classList.add('selected');
+    }
+  });
+  updateSelectedCountUI();
+});
+
+batchClearBtn.addEventListener('click', () => {
+  selectedItemIds.clear();
+  const visibleCards = cardsContainer.querySelectorAll('.card');
+  visibleCards.forEach(cardEl => {
+    const checkbox = cardEl.querySelector('.card-select-checkbox') as HTMLInputElement;
+    if (checkbox) checkbox.checked = false;
+    cardEl.classList.remove('selected');
+  });
+  updateSelectedCountUI();
+});
+
+batchMarkPrintedBtn.addEventListener('click', () => {
+  if (selectedItemIds.size === 0) return alert('No items selected.');
+  if (confirm(`Mark ${selectedItemIds.size} selected items as printed?`)) {
+    let printedIds: Set<string> = new Set();
+    try {
+      const saved = localStorage.getItem('printed-items');
+      if (saved) printedIds = new Set(JSON.parse(saved));
+    } catch(e) {}
+    
+    selectedItemIds.forEach(id => {
+      printedIds.add(id);
+    });
+    
+    localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+    
+    selectedItemIds.clear();
+    updateSelectedCountUI();
+    renderCards(searchInput.value);
+  }
+});
+
+batchMarkUnprintedBtn.addEventListener('click', () => {
+  if (selectedItemIds.size === 0) return alert('No items selected.');
+  if (confirm(`Mark ${selectedItemIds.size} selected items as unprinted?`)) {
+    let printedIds: Set<string> = new Set();
+    try {
+      const saved = localStorage.getItem('printed-items');
+      if (saved) printedIds = new Set(JSON.parse(saved));
+    } catch(e) {}
+    
+    selectedItemIds.forEach(id => {
+      printedIds.delete(id);
+    });
+    
+    localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
+    
+    selectedItemIds.clear();
+    updateSelectedCountUI();
+    renderCards(searchInput.value);
+  }
+});
+
+batchPrintBtn.addEventListener('click', async () => {
+  if (selectedItemIds.size === 0) {
+    alert('No items selected.');
+    return;
+  }
+  
+  const selectedCards = cards.filter(c => selectedItemIds.has(c.id));
+  await bulkPrintCards(selectedCards, batchPrintBtn);
+  
+  selectedItemIds.clear();
+  updateSelectedCountUI();
 });
 
 document.querySelectorAll('.filter-tab').forEach(tab => {
@@ -2002,8 +2373,7 @@ editTemplateBtn.addEventListener('click', async () => {
   printPreviewModal.classList.remove('hidden');
 });
 
-const printAllUnprintedBtn = document.getElementById('print-all-unprinted-btn') as HTMLButtonElement;
-printAllUnprintedBtn.addEventListener('click', async () => {
+async function bulkPrintCards(selectedCards: CardData[], btnElement: HTMLButtonElement) {
   if (!activeTransport) {
     alert('Printer not connected! Please connect the printer first.');
     return;
@@ -2014,39 +2384,29 @@ printAllUnprintedBtn.addEventListener('click', async () => {
     const saved = localStorage.getItem('printed-items');
     if (saved) printedIds = new Set(JSON.parse(saved));
   } catch(e) {}
-  
-  const unprintedCards = cards.filter(c => !printedIds.has(c.id));
-  if (unprintedCards.length === 0) {
-    alert('No unprinted items found.');
-    return;
-  }
 
   if (activeTransport.type === 'browser') {
-    // Bulk print via Browser dialog (all in one print job!)
-    if (!confirm(`Are you sure you want to open the browser print dialog for all ${unprintedCards.length} unprinted items?`)) {
+    if (!confirm(`Are you sure you want to open the browser print dialog for all ${selectedCards.length} items?`)) {
       return;
     }
-    const originalText = printAllUnprintedBtn.textContent;
-    printAllUnprintedBtn.textContent = 'Preparing Print...';
-    printAllUnprintedBtn.disabled = true;
+    const originalText = btnElement.textContent;
+    btnElement.textContent = 'Preparing Print...';
+    btnElement.disabled = true;
 
     try {
-      // 1. Render all cards into the receiptPaper container temporarily
       receiptPaper.innerHTML = '';
       
-      for (let i = 0; i < unprintedCards.length; i++) {
-        const card = unprintedCards[i];
+      for (let i = 0; i < selectedCards.length; i++) {
+        const card = selectedCards[i];
         const lines = await getPrintLinesForCard(card);
         
-        // Create a wrapper for this specific card
         const cardContainer = document.createElement('div');
         cardContainer.className = 'bulk-print-item';
-        if (i < unprintedCards.length - 1) {
+        if (i < selectedCards.length - 1) {
           cardContainer.style.setProperty('page-break-after', 'always');
           cardContainer.style.setProperty('break-after', 'page');
         }
         
-        // Render lines into the wrapper
         for (let j = 0; j < lines.length; j++) {
           const line = lines[j];
           if (!line.enabled) continue;
@@ -2082,49 +2442,42 @@ printAllUnprintedBtn.addEventListener('click', async () => {
         receiptPaper.appendChild(cardContainer);
       }
       
-      // Open the print preview modal backdrop so the @media print styles apply
       currentEditId = null;
       isTemplateMode = false;
       printPreviewModal.classList.remove('hidden');
       
-      // Wait a frame for DOM to update
       await new Promise(r => setTimeout(r, 100));
-      
-      // 2. Trigger browser print
       await triggerBrowserPrint();
       
-      // 3. Mark all as printed and add to history
-      for (const card of unprintedCards) {
+      for (const card of selectedCards) {
         const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
         const title = card[titleKey] || 'Untitled Item';
         addHistoryLog(card.id, title, 'success');
         printedIds.add(card.id);
       }
       localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
-      
-      // 4. Close the modal
       closePrintPreviewModal();
       
     } catch (err: any) {
       alert('Bulk print error: ' + err.message);
     } finally {
-      printAllUnprintedBtn.textContent = originalText;
-      printAllUnprintedBtn.disabled = false;
+      btnElement.textContent = originalText;
+      btnElement.disabled = false;
       renderCards(searchInput.value);
     }
     return;
   }
   
-  if (!confirm(`Are you sure you want to print ${unprintedCards.length} items sequentially?`)) {
+  if (!confirm(`Are you sure you want to print ${selectedCards.length} items sequentially?`)) {
     return;
   }
   
-  const originalText = printAllUnprintedBtn.textContent;
-  printAllUnprintedBtn.textContent = 'Printing...';
-  printAllUnprintedBtn.disabled = true;
+  const originalText = btnElement.textContent;
+  btnElement.textContent = 'Printing...';
+  btnElement.disabled = true;
   
   try {
-    for (const card of unprintedCards) {
+    for (const card of selectedCards) {
        const titleKey = Object.keys(card).find(k => k.toLowerCase().includes('brief identifier') || k.toLowerCase().match(/name|title|item/)) || Object.keys(card)[0];
        const title = card[titleKey] || 'Untitled Item';
        
@@ -2134,21 +2487,44 @@ printAllUnprintedBtn.addEventListener('click', async () => {
          addHistoryLog(card.id, title, 'success');
          printedIds.add(card.id);
          localStorage.setItem('printed-items', JSON.stringify([...printedIds]));
-       } catch (e: any) {
-         addHistoryLog(card.id, title, 'error', e.message);
-         throw e; // Break loop on hardware error
+       } catch (err: any) {
+         addHistoryLog(card.id, title, 'error', err.message);
+         console.error("Sequential print failed for", card.id, err);
+         throw err;
        }
        
-       // Wait a tiny bit between receipts to prevent buffer overflow
        await new Promise(r => setTimeout(r, 500));
     }
   } catch (err: any) {
     alert('Bulk print error: ' + err.message);
   } finally {
-    printAllUnprintedBtn.textContent = originalText;
-    printAllUnprintedBtn.disabled = false;
+    btnElement.textContent = originalText;
+    btnElement.disabled = false;
     renderCards(searchInput.value);
   }
+}
+
+function updateSelectedCountUI() {
+  if (selectedCount) {
+    selectedCount.textContent = `${selectedItemIds.size} items selected`;
+  }
+}
+
+const printAllUnprintedBtn = document.getElementById('print-all-unprinted-btn') as HTMLButtonElement;
+printAllUnprintedBtn.addEventListener('click', async () => {
+  let printedIds: Set<string> = new Set();
+  try {
+    const saved = localStorage.getItem('printed-items');
+    if (saved) printedIds = new Set(JSON.parse(saved));
+  } catch(e) {}
+  
+  const unprintedCards = cards.filter(c => !printedIds.has(c.id));
+  if (unprintedCards.length === 0) {
+    alert('No unprinted items found.');
+    return;
+  }
+  
+  await bulkPrintCards(unprintedCards, printAllUnprintedBtn);
 });
 
 exportTemplateBtn.addEventListener('click', () => {
@@ -2361,6 +2737,8 @@ exportAppBackupBtn.addEventListener('click', () => {
     'sync-interval': localStorage.getItem('sync-interval'),
     'last-transport-type': localStorage.getItem('last-transport-type'),
     'last-network-ip': localStorage.getItem('last-network-ip'),
+    'card-preview-fields': localStorage.getItem('card-preview-fields'),
+    'card-preview-fields-order': localStorage.getItem('card-preview-fields-order'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
