@@ -225,24 +225,27 @@
             <div id="card-preview-fields-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--glass-border); margin-bottom: 15px;">
               <em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure preview fields.</em>
             </div>
-            <div class="auto-sync-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="auto-sync-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;">
               <label for="full-width-toggle">Full-Width Grid Layout</label>
-              <label class="toggle-switch"><input type="checkbox" id="full-width-toggle" /><span class="toggle-slider"></span></label>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <label class="toggle-switch" style="margin: 0;"><input type="checkbox" id="full-width-toggle" /><span class="toggle-slider"></span></label>
+                
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: 10px;">
+                  <label for="grid-columns-select" style="font-size: 0.85rem; color: var(--text-muted); font-weight: normal;">Columns:</label>
+                  <select id="grid-columns-select" class="form-input" style="padding: 6px 24px 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); width: 85px; outline: none;">
+                    <option value="auto" style="color: #000;">Auto</option>
+                    <option value="2" style="color: #000;">2</option>
+                    <option value="3" style="color: #000;">3</option>
+                    <option value="4" style="color: #000;">4</option>
+                    <option value="5" style="color: #000;">5</option>
+                    <option value="6" style="color: #000;">6</option>
+                    <option value="7" style="color: #000;">7</option>
+                    <option value="8" style="color: #000;">8</option>
+                  </select>
+                </div>
+              </div>
             </div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; margin-bottom: 15px;">Expand the dashboard layout to fill the entire browser width (ideal for large screens).</p>
-            
-            <div class="auto-sync-header" style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="grid-columns-select">Grid Columns Count</label>
-              <select id="grid-columns-select" class="form-input" style="padding: 6px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); width: 150px; outline: none;">
-                <option value="auto" selected style="color: #000;">Auto (Responsive)</option>
-                <option value="2" style="color: #000;">2 Columns</option>
-                <option value="3" style="color: #000;">3 Columns</option>
-                <option value="4" style="color: #000;">4 Columns</option>
-                <option value="5" style="color: #000;">5 Columns</option>
-                <option value="6" style="color: #000;">6 Columns</option>
-              </select>
-            </div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Force a specific number of columns on desktop (Auto flows dynamically based on width).</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Expand display to fill the entire browser width and force a specific column count (Auto flows dynamically based on width).</p>
           </div>
 
           <hr>
