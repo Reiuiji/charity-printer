@@ -1057,24 +1057,11 @@ async function printAuctionList() {
   lines.push({ enabled: true, text: colHeader, bold: true, align: 'left', size: 'normal' });
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
 
-  cards.forEach((card) => {
-    let col1Val = String(card[activeCol1] || '');
-    let col2Val = String(card[activeCol2] || '');
-    let col3Val = String(card[activeCol3] || '');
-
-    // Format Col 3 starting bid / price if applicable
-    if (activeCol3.toLowerCase().includes('bid') || activeCol3.toLowerCase().includes('price')) {
-      if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
-        col3Val = `$${col3Val}`;
-      }
-    }
-
-    const itemRow = formatAuctionColumns(col1Val, col2Val, col3Val, totalWidth);
-    lines.push({ enabled: true, text: itemRow, bold: false, align: 'left', size: 'normal' });
-  });
+  // Add the single Loop Line representing all items
+  lines.push({ enabled: true, text: 'Loop', bold: false, align: 'left', size: 'normal', isLoop: true });
 
   lines.push({ enabled: true, text: '-'.repeat(totalWidth), bold: false, align: 'center', size: 'normal', isSeparator: true });
-  lines.push({ enabled: true, text: `TOTAL ITEMS: ${cards.length}`, bold: true, align: 'center', size: 'normal' });
+  lines.push({ enabled: true, text: 'TOTAL ITEMS: {TOTAL}', bold: true, align: 'center', size: 'normal' });
 
   // Open in print preview modal instead of immediate auto-triggered OS print
   isAuctionPrint = true;
@@ -1766,11 +1753,73 @@ function closePrintPreviewModal() {
   isAuctionPrint = false;
 }
 
+function expandPrintLines(lines: PrintLine[]): PrintLine[] {
+  const expanded: PrintLine[] = [];
+  const paperWidthSetting = browserPaperSize.value || '80mm';
+  const totalWidth = paperWidthSetting === '58mm' ? 32 : 40;
+
+  // Load configured or auto-detected columns
+  let activeCol1 = localStorage.getItem('auction-col1-field') || '';
+  let activeCol2 = localStorage.getItem('auction-col2-field') || '';
+  let activeCol3 = localStorage.getItem('auction-col3-field') || '';
+
+  const sampleCard = cards[0] || {};
+  const validHeaders = ['id', ...Object.keys(sampleCard)];
+
+  if (!activeCol1 || !validHeaders.includes(activeCol1)) {
+    activeCol1 = Object.keys(sampleCard).find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id';
+  }
+  if (!activeCol2 || !validHeaders.includes(activeCol2)) {
+    activeCol2 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || Object.keys(sampleCard)[0] || 'id';
+  }
+  if (!activeCol3 || !validHeaders.includes(activeCol3)) {
+    activeCol3 = Object.keys(sampleCard).find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id';
+  }
+
+  lines.forEach(line => {
+    if (!line.enabled) return;
+
+    if (line.isLoop) {
+      cards.forEach(card => {
+        let col1Val = String(card[activeCol1] || '');
+        let col2Val = String(card[activeCol2] || '');
+        let col3Val = String(card[activeCol3] || '');
+
+        if (activeCol3.toLowerCase().includes('bid') || activeCol3.toLowerCase().includes('price')) {
+          if (col3Val && !col3Val.startsWith('$') && !isNaN(Number(col3Val))) {
+            col3Val = `$${col3Val}`;
+          }
+        }
+
+        expanded.push({
+          enabled: true,
+          text: formatAuctionColumns(col1Val, col2Val, col3Val, totalWidth),
+          bold: line.bold || false,
+          align: line.align || 'left',
+          size: line.size || 'normal'
+        });
+      });
+    } else {
+      let lineText = line.text;
+      if (lineText.includes('{TOTAL}')) {
+        lineText = lineText.replace(/{TOTAL}/g, String(cards.length));
+      }
+      expanded.push({
+        ...line,
+        text: lineText
+      });
+    }
+  });
+
+  return expanded;
+}
+
 function updateReceiptPaper() {
   if (!isAuctionPrint) savePrintTemplate();
   // Render receipt paper
   receiptPaper.innerHTML = '';
-  printLines.forEach((line, index) => {
+  const linesToRender = isAuctionPrint ? expandPrintLines(printLines) : printLines;
+  linesToRender.forEach((line, index) => {
     if (!line.enabled) return;
     if (line.isImage && line.imageUrl) {
       const imgWrap = document.createElement('div');
@@ -2000,6 +2049,73 @@ function renderPrintPreview() {
         renderPrintPreview();
       });
 
+      topRow.appendChild(removeBtn);
+    } else if (line.isLoop) {
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = '🔁 Loop:';
+      labelSpan.style.fontSize = '0.85rem';
+      labelSpan.style.color = '#fbbf24';
+      labelSpan.style.fontWeight = 'bold';
+      labelSpan.style.marginRight = '5px';
+      topRow.appendChild(labelSpan);
+
+      // Create three selects
+      const col1Select = document.createElement('select');
+      const col2Select = document.createElement('select');
+      const col3Select = document.createElement('select');
+
+      const selects = [col1Select, col2Select, col3Select];
+      const storageKeys = ['auction-col1-field', 'auction-col2-field', 'auction-col3-field'];
+      const defaultSelectors = [
+        (headers: string[]) => headers.find(h => h.toLowerCase() === 'donation #' || h.toLowerCase() === 'donation_num' || h.toLowerCase() === 'id') || 'id',
+        (headers: string[]) => headers.find(h => h.toLowerCase().includes('brief identifier') || h.toLowerCase().match(/name|title|item/)) || headers[1] || 'id',
+        (headers: string[]) => headers.find(h => h.toLowerCase().includes('starting bid') || h.toLowerCase().includes('bid') || h.toLowerCase().includes('price')) || 'id'
+      ];
+
+      const headers = cards.length > 0 ? ['id', ...Object.keys(cards[0]).filter(k => k !== 'id')] : ['id'];
+
+      selects.forEach((sel, i) => {
+        sel.className = 'form-input';
+        sel.style.padding = '4px 6px';
+        sel.style.borderRadius = '4px';
+        sel.style.background = 'rgba(0,0,0,0.2)';
+        sel.style.color = 'var(--text-main)';
+        sel.style.border = '1px solid var(--glass-border)';
+        sel.style.fontSize = '0.8rem';
+        sel.style.width = i === 1 ? '100px' : '70px'; // Col 2 gets more width for name
+        sel.style.outline = 'none';
+
+        headers.forEach(h => {
+          const opt = document.createElement('option');
+          opt.value = h;
+          opt.textContent = h === 'id' ? 'ID' : shortLabel(h);
+          opt.style.color = '#000';
+          sel.appendChild(opt);
+        });
+
+        // Set value from localStorage or default
+        let savedVal = localStorage.getItem(storageKeys[i]) || '';
+        if (!savedVal || !headers.includes(savedVal)) {
+          savedVal = defaultSelectors[i](headers);
+          localStorage.setItem(storageKeys[i], savedVal);
+        }
+        sel.value = savedVal;
+
+        sel.addEventListener('change', () => {
+          localStorage.setItem(storageKeys[i], sel.value);
+          updateReceiptPaper();
+        });
+
+        topRow.appendChild(sel);
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-line-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        printLines.splice(index, 1);
+        renderPrintPreview();
+      });
       topRow.appendChild(removeBtn);
     } else {
       const textInput = document.createElement('input');
@@ -2336,7 +2452,7 @@ printPreviewSend.addEventListener('click', async () => {
 
   if (isAuctionPrint) {
     try {
-      await sendLinesToPrinter(printLines);
+      await sendLinesToPrinter(expandPrintLines(printLines));
       closePrintPreviewModal();
     } catch (e: any) {
       alert(e.message);
