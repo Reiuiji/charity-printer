@@ -36,9 +36,21 @@
               </div>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn secondary-btn" id="select-mode-btn">☑️ Select Mode</button>
               <button class="btn secondary-btn hidden" id="create-custom-receipt-btn">➕ Add Item</button>
               <button class="btn print-btn" id="print-all-unprinted-btn">🖨️ Print Unprinted</button>
             </div>
+          </div>
+
+          <!-- Batch Actions Bar -->
+          <div id="batch-actions-bar" class="hidden glass-panel" style="display: flex; gap: 12px; align-items: center; padding: 12px 20px; border-radius: 12px; flex-wrap: wrap; margin-bottom: 20px;">
+            <span id="selected-count" style="font-weight: 600; font-size: 0.95rem; color: var(--text-main); margin-right: 10px;">0 items selected</span>
+            <button class="btn secondary-btn" id="batch-select-all-btn" style="padding: 6px 12px; font-size: 0.85rem;">Select All</button>
+            <button class="btn secondary-btn" id="batch-clear-btn" style="padding: 6px 12px; font-size: 0.85rem;">Clear Selection</button>
+            <div style="height: 20px; width: 1px; background: var(--glass-border); margin: 0 5px;"></div>
+            <button class="btn secondary-btn" id="batch-mark-printed-btn" style="padding: 6px 12px; font-size: 0.85rem; color: var(--secondary-color); border-color: rgba(16, 185, 129, 0.4);">✓ Mark Printed</button>
+            <button class="btn secondary-btn" id="batch-mark-unprinted-btn" style="padding: 6px 12px; font-size: 0.85rem; color: var(--danger-color); border-color: rgba(239, 68, 68, 0.4);">↺ Mark Unprinted</button>
+            <button class="btn print-btn" id="batch-print-btn" style="padding: 6px 14px; font-size: 0.85rem; margin-left: auto;">🖨️ Print Selected</button>
           </div>
 
           <div id="cards-container" class="cards-grid">
@@ -200,6 +212,19 @@
               <em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure mapping.</em>
             </div>
             <button id="add-schema-var-btn" class="btn secondary-btn" style="margin-top: 10px; width: 100%;">➕ Add Internal Variable</button>
+          </div>
+
+          <hr>
+
+          <!-- Card Preview Customization -->
+          <div class="settings-section">
+            <h3 style="margin-bottom: 10px;">🎴 Card Preview Fields</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
+              Choose which fields are displayed as a preview on the dashboard cards. If none are selected, the first 3 non-empty fields will be shown.
+            </p>
+            <div id="card-preview-fields-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--glass-border);">
+              <em style="font-size: 0.8rem; color: var(--text-muted);">Fetch data first to configure preview fields.</em>
+            </div>
           </div>
 
           <hr>
