@@ -91,6 +91,9 @@ const cardPreviewFieldsContainer = document.getElementById('card-preview-fields-
 // Advanced Features
 const liveEditToggle = document.getElementById('live-edit-toggle') as HTMLInputElement;
 const readOnlyToggle = document.getElementById('read-only-toggle') as HTMLInputElement;
+const fullWidthToggle = document.getElementById('full-width-toggle') as HTMLInputElement;
+const gridColumnsSelect = document.getElementById('grid-columns-select') as HTMLSelectElement;
+const appElement = document.getElementById('app') as HTMLDivElement;
 const customIdSettings = document.getElementById('custom-id-settings') as HTMLDivElement;
 const customIdPrefix = document.getElementById('custom-id-prefix') as HTMLInputElement;
 const customIdNext = document.getElementById('custom-id-next') as HTMLInputElement;
@@ -218,6 +221,27 @@ function applyBrowserPrintSettings() {
   root.style.setProperty('--print-image-width', imgWidth);
 }
 
+function applyGridColumns() {
+  const cols = localStorage.getItem('grid-columns') || 'auto';
+  if (gridColumnsSelect) {
+    gridColumnsSelect.value = cols;
+  }
+  
+  const isFullWidth = localStorage.getItem('full-width') === 'true';
+  if (gridColumnsSelect) {
+    gridColumnsSelect.disabled = !isFullWidth;
+  }
+
+  const cardsContainer = document.getElementById('cards-container');
+  if (!cardsContainer) return;
+
+  if (isFullWidth && cols !== 'auto') {
+    cardsContainer.style.setProperty('--grid-columns', `repeat(${cols}, 1fr)`);
+  } else {
+    cardsContainer.style.removeProperty('--grid-columns');
+  }
+}
+
 // Initialization
 function init() {
   // Inject build-time version info into the footer
@@ -300,6 +324,12 @@ function init() {
     document.body.classList.add('read-only-mode');
   }
 
+  const savedFullWidth = localStorage.getItem('full-width');
+  if (savedFullWidth === 'true') {
+    if (fullWidthToggle) fullWidthToggle.checked = true;
+    if (appElement) appElement.classList.add('full-width');
+  }
+
   // Load and apply browser print settings
   const savedPaperSize = localStorage.getItem('browser-paper-size') || '80mm';
   browserPaperSize.value = savedPaperSize;
@@ -308,6 +338,7 @@ function init() {
   const savedImageWidth = localStorage.getItem('browser-image-width') || '80%';
   browserImageWidth.value = savedImageWidth;
   applyBrowserPrintSettings();
+  applyGridColumns();
 
   browserPaperSize.addEventListener('change', () => {
     localStorage.setItem('browser-paper-size', browserPaperSize.value);
@@ -320,6 +351,10 @@ function init() {
   browserImageWidth.addEventListener('change', () => {
     localStorage.setItem('browser-image-width', browserImageWidth.value);
     applyBrowserPrintSettings();
+  });
+  gridColumnsSelect.addEventListener('change', () => {
+    localStorage.setItem('grid-columns', gridColumnsSelect.value);
+    applyGridColumns();
   });
 
   // Load Profiles and History
@@ -2609,6 +2644,16 @@ readOnlyToggle.addEventListener('change', () => {
   }
 });
 
+fullWidthToggle.addEventListener('change', () => {
+  localStorage.setItem('full-width', fullWidthToggle.checked.toString());
+  if (fullWidthToggle.checked) {
+    appElement.classList.add('full-width');
+  } else {
+    appElement.classList.remove('full-width');
+  }
+  applyGridColumns();
+});
+
 createCustomReceiptBtn.addEventListener('click', () => {
   const prefix = customIdPrefix.value || 'CUSTOM-';
   const nextNumStr = customIdNext.value || '1000';
@@ -2739,6 +2784,8 @@ exportAppBackupBtn.addEventListener('click', () => {
     'last-network-ip': localStorage.getItem('last-network-ip'),
     'card-preview-fields': localStorage.getItem('card-preview-fields'),
     'card-preview-fields-order': localStorage.getItem('card-preview-fields-order'),
+    'full-width': localStorage.getItem('full-width'),
+    'grid-columns': localStorage.getItem('grid-columns'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));

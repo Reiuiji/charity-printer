@@ -47,6 +47,11 @@ body {
   min-height: calc(100vh - 40px);
 }
 
+#app.full-width {
+  max-width: none !important;
+  width: 100% !important;
+}
+
 /* Glassmorphism utilities */
 .glass-header, .glass-panel {
   background: var(--glass-bg);
@@ -387,7 +392,7 @@ body.light-theme select option {
 /* Cards Grid */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: var(--grid-columns, repeat(auto-fit, minmax(320px, 1fr)));
   gap: 20px;
 }
 
