@@ -82,6 +82,7 @@ const appBackupFileInput = document.getElementById('app-backup-file-input') as H
 const printerStatus = document.getElementById('printer-status') as HTMLDivElement;
 const printerStatusText = document.getElementById('printer-status-text') as HTMLSpanElement;
 const feedLinesInput = document.getElementById('feed-lines-input') as HTMLInputElement;
+const printColorMode = document.getElementById('print-color-mode') as HTMLSelectElement;
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
 const closeSettingsBtn = document.getElementById('close-settings') as HTMLSpanElement;
@@ -212,6 +213,17 @@ function updateMainStatuses() {
     mainAutoPrintStatus.style.color = 'var(--text-muted)';
     mainAutoPrintStatus.style.borderColor = 'var(--glass-border)';
   }
+}
+
+function isColorMode(): boolean {
+  return (localStorage.getItem('print-color-mode') || 'monochrome') === 'color';
+}
+
+function getImageFilter(gamma: number = 1.0): string {
+  if (isColorMode()) {
+    return gamma !== 1.0 ? `brightness(${gamma})` : 'none';
+  }
+  return `grayscale(100%) contrast(150%) brightness(${gamma})`;
 }
 
 function applyBrowserPrintSettings() {
@@ -369,6 +381,8 @@ function init() {
   browserPrintScale.value = savedPrintScale;
   const savedImageWidth = localStorage.getItem('browser-image-width') || '80%';
   browserImageWidth.value = savedImageWidth;
+  const savedColorMode = localStorage.getItem('print-color-mode') || 'monochrome';
+  printColorMode.value = savedColorMode;
   applyBrowserPrintSettings();
   applyGridColumns();
 
@@ -383,6 +397,10 @@ function init() {
   browserImageWidth.addEventListener('change', () => {
     localStorage.setItem('browser-image-width', browserImageWidth.value);
     applyBrowserPrintSettings();
+  });
+  printColorMode.addEventListener('change', () => {
+    localStorage.setItem('print-color-mode', printColorMode.value);
+    renderPrintPreview();
   });
   gridColumnsSelect.addEventListener('change', () => {
     localStorage.setItem('grid-columns', gridColumnsSelect.value);
@@ -2057,7 +2075,7 @@ async function updateReceiptPaper() {
       
       img.style.maxWidth = 'var(--print-image-width, 80%)';
       img.style.display = 'inline-block';
-      img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`; // Visual approximation of thermal print
+      img.style.filter = getImageFilter(line.gamma || 1.0);
       imgWrap.appendChild(img);
       receiptPaper.appendChild(imgWrap);
       return;
@@ -2230,7 +2248,7 @@ function renderPrintPreview() {
           printLines[index].gamma = parseFloat(slider.value);
           const img = document.getElementById('preview-img-' + index);
           if (img) {
-            img.style.filter = `grayscale(100%) contrast(150%) brightness(${slider.value})`;
+            img.style.filter = getImageFilter(parseFloat(slider.value));
           }
         });
         slider.addEventListener('change', () => savePrintTemplate());
@@ -2249,7 +2267,7 @@ function renderPrintPreview() {
           slider.value = '1.0';
           printLines[index].gamma = 1.0;
           const img = document.getElementById('preview-img-' + index);
-          if (img) img.style.filter = `grayscale(100%) contrast(150%) brightness(1.0)`;
+          if (img) img.style.filter = getImageFilter(1.0);
           savePrintTemplate();
         });
         
@@ -3558,7 +3576,7 @@ async function bulkPrintCards(selectedCards: CardData[], btnElement: HTMLButtonE
             img.src = line.imageUrl;
             img.style.maxWidth = 'var(--print-image-width, 80%)';
             img.style.display = 'inline-block';
-            img.style.filter = `grayscale(100%) contrast(150%) brightness(${line.gamma || 1.0})`;
+            img.style.filter = getImageFilter(line.gamma || 1.0);
             imgWrap.appendChild(img);
             cardContainer.appendChild(imgWrap);
           } else {
@@ -3891,6 +3909,7 @@ exportAppBackupBtn.addEventListener('click', () => {
     'full-width': localStorage.getItem('full-width'),
     'grid-columns': localStorage.getItem('grid-columns'),
     'auction-card-order': localStorage.getItem('auction-card-order'),
+    'print-color-mode': localStorage.getItem('print-color-mode'),
   };
   
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));

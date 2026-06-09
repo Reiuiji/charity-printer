@@ -150,6 +150,17 @@
               </div>
             </div>
 
+            <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+              <label for="print-color-mode" style="display: block; font-size: 0.9rem; margin-bottom: 5px;">🎨 Print Type</label>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <select id="print-color-mode" class="form-input" style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-main); border: 1px solid var(--glass-border); outline: none;">
+                  <option value="monochrome" style="color: #000;">Monochrome (B&W)</option>
+                  <option value="color" style="color: #000;">Color</option>
+                </select>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">Monochrome applies dithering for thermal printers. Color preserves full color for inkjet/laser.</span>
+              </div>
+            </div>
+
             <div id="browser-print-settings" class="hidden" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
               <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 0.95rem; color: var(--text-main);">📄 Browser Print Options</h4>
               <div style="display: flex; flex-direction: column; gap: 12px;">
